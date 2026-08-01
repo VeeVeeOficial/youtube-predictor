@@ -1,859 +1,2158 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Views Predictor 🎬 | ML-Powered Predictions</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <style>
-        :root {
-            --youtube-red: #FF0000;
-            --youtube-dark: #282828;
-            --youtube-light: #F9F9F9;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        }
-        
-        .main-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .header {
-            text-align: center;
-            color: white;
-            padding: 40px 0;
-            animation: fadeInDown 1s;
-        }
-        
-        .header h1 {
-            font-size: 3.5rem;
-            font-weight: 700;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-            margin-bottom: 10px;
-        }
-        
-        .header p {
-            font-size: 1.2rem;
-            opacity: 0.95;
-        }
-        
-        .model-badge {
-            display: inline-block;
-            background: rgba(255,255,255,0.2);
-            padding: 5px 15px;
-            border-radius: 20px;
-            margin-top: 10px;
-            backdrop-filter: blur(10px);
-        }
-        
-        .card {
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-            animation: fadeInUp 1s;
-            border: none;
-            overflow: hidden;
-        }
-        
-        .card-header {
-            background: linear-gradient(135deg, var(--youtube-red), #CC0000);
-            color: white;
-            border: none;
-            padding: 25px;
-            font-size: 1.4rem;
-            font-weight: 600;
-        }
-        
-        .form-label {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 8px;
-            font-size: 0.95rem;
-        }
-        
-        .form-control, .form-select {
-            border-radius: 12px;
-            border: 2px solid #e0e0e0;
-            padding: 12px 15px;
-            transition: all 0.3s;
-            font-size: 0.95rem;
-        }
-        
-        .form-control:focus, .form-select:focus {
-            border-color: var(--youtube-red);
-            box-shadow: 0 0 0 0.2rem rgba(255, 0, 0, 0.15);
-        }
-        
-        .btn-predict {
-            background: linear-gradient(135deg, var(--youtube-red), #CC0000);
-            color: white;
-            border: none;
-            padding: 15px 50px;
-            font-size: 1.2rem;
-            font-weight: 600;
-            border-radius: 50px;
-            transition: all 0.3s;
-            box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .btn-predict:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 25px rgba(255, 0, 0, 0.4);
-            background: linear-gradient(135deg, #CC0000, #990000);
-            color: white;
-        }
-        
-        .btn-predict:active {
-            transform: translateY(0);
-        }
-        
-        .result-box {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            margin-top: 30px;
-            display: none;
-            animation: slideIn 0.5s;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        }
-        
-        .predicted-views {
-            font-size: 4rem;
-            font-weight: 700;
-            color: var(--youtube-red);
-            text-align: center;
-            margin: 30px 0;
-            background: linear-gradient(135deg, var(--youtube-red), #CC0000);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .confidence-bar {
-            height: 40px;
-            background: #f0f0f0;
-            border-radius: 20px;
-            overflow: hidden;
-            margin: 30px 0;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .confidence-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #00C851, #FFD700);
-            transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 1.1rem;
-        }
-        
-        .feature-badge {
-            display: inline-block;
-            padding: 8px 20px;
-            margin: 5px;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            border-radius: 25px;
-            color: #555;
-            font-weight: 600;
-            font-size: 0.9rem;
-            transition: all 0.3s;
-        }
-        
-        .feature-badge:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin: 30px 0;
-        }
-        
-        .stat-card {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            padding: 25px;
-            border-radius: 15px;
-            text-align: center;
-            transition: all 0.3s;
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        }
-        
-        .stat-value {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: var(--youtube-red);
-            line-height: 1;
-        }
-        
-        .stat-label {
-            color: #666;
-            margin-top: 10px;
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
-        
-        @keyframes fadeInDown {
-            from { opacity: 0; transform: translateY(-30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(-30px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 40px;
-        }
-        
-        .spinner-border {
-            width: 3rem;
-            height: 3rem;
-            border-width: 0.3em;
-        }
-        
-        .tips-section {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            margin-top: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        }
-        
-        .tip-item {
-            padding: 15px 20px;
-            margin: 10px 0;
-            border-left: 4px solid var(--youtube-red);
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            border-radius: 10px;
-            transition: all 0.3s;
-        }
-        
-        .tip-item:hover {
-            transform: translateX(5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        .form-check-input:checked {
-            background-color: var(--youtube-red);
-            border-color: var(--youtube-red);
-        }
-        
-        .emoji-btn {
-            font-size: 1.8rem;
-            cursor: pointer;
-            margin: 5px;
-            padding: 8px 12px;
-            border-radius: 10px;
-            transition: all 0.2s;
-            background: white;
-            border: 2px solid #e0e0e0;
-        }
-        
-        .emoji-btn:hover {
-            background: var(--youtube-red);
-            transform: scale(1.2) rotate(5deg);
-            box-shadow: 0 5px 15px rgba(255,0,0,0.3);
-        }
-        
-        .input-group-text {
-            background: linear-gradient(135deg, var(--youtube-red), #CC0000);
-            color: white;
-            border: none;
-            font-weight: 600;
-        }
-        
-        @media (max-width: 768px) {
-            .header h1 { font-size: 2.5rem; }
-            .predicted-views { font-size: 3rem; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>Camera Flip Backend - Complete</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      color: #0f172a;
+    }
+    header {
+      background: #020617;
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header h1 {
+      font-size: 18px;
+      margin: 0;
+    }
+    .nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .nav button {
+      background: transparent;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.8);
+      color: #e5e7eb;
+      padding: 4px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .nav button.active {
+      background: #22c55e;
+      border-color: #22c55e;
+      color: #022c22;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 16px auto;
+      padding: 0 12px 32px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 10px 40px rgba(15,23,42,0.20);
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 6px 8px;
+      margin-top: 3px;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+      font-size: 13px;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .col-3 { flex: 0 0 calc(25% - 8px); }
+    .col-4 { flex: 0 0 calc(33.333% - 8px); }
+    .col-6 { flex: 0 0 calc(50% - 8px); }
+    .col-12 { flex: 0 0 100%; }
+
+    button {
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: none;
+      font-size: 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: #22c55e;
+      color: #022c22;
+    }
+    .btn-outline {
+      background: white;
+      color: #0f172a;
+      border: 1px solid #cbd5f5;
+    }
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+    .btn-warning {
+      background: #f59e0b;
+      color: white;
+    }
+    .btn-info {
+      background: #3b82f6;
+      color: white;
+    }
+    .btn-sm {
+      padding: 4px 10px;
+      font-size: 11px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th, td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+    }
+    th {
+      background: #eff6ff;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: #e5e7eb;
+    }
+    .tag.ready { background:#dcfce7; color:#166534; }
+    .tag.repair { background:#fef9c3; color:#92400e; }
+    .tag.sold { background:#e0f2fe; color:#075985; }
+    .tag.returned { background:#fecaca; color:#991b1b; }
+    .tag.returned-seller { background:#fde047; color:#854d0e; }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit,minmax(200px,1fr));
+      gap: 12px;
+    }
+    .stat-card {
+      background: #020617;
+      color:#e5e7eb;
+      border-radius: 12px;
+      padding: 12px 14px;
+      position: relative;
+      overflow:hidden;
+    }
+    .stat-label { font-size:12px; color:#9ca3af; }
+    .stat-value { font-size:22px; margin-top:4px; }
+    .stat-sub { font-size:11px; color:#9ca3af; margin-top:2px; }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      background: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      display: none;
+      z-index: 1000;
+      max-width: 300px;
+      border-left: 4px solid #22c55e;
+    }
+    .toast.show { display: block; animation: slideIn 0.3s ease; }
+    .toast.error { border-left-color: #ef4444; }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      animation: fadeIn 0.2s;
+    }
+    .modal.show { display: flex; align-items: center; justify-content: center; }
+    .modal-content {
+      background-color: white;
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      animation: slideUp 0.3s;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes slideUp {
+      from { transform: translateY(50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .modal-header h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+    .close-modal {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #6b7280;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+    }
+    .modal-footer {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 16px;
+    }
+
+    /* Filter Tabs */
+    .filter-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .filter-tabs button {
+      padding: 6px 12px;
+      background: #f3f4f6;
+      color: #374151;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .filter-tabs button.active {
+      background: #3b82f6;
+      color: white;
+    }
+
+    /* Autocomplete */
+    .autocomplete {
+      position: relative;
+    }
+    .autocomplete-items {
+      position: absolute;
+      border: 1px solid #d4d4d4;
+      background: white;
+      z-index: 99;
+      top: 100%;
+      left: 0;
+      right: 0;
+      max-height: 200px;
+      overflow-y: auto;
+      border-radius: 6px;
+      margin-top: 2px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .autocomplete-items div {
+      padding: 8px;
+      cursor: pointer;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 13px;
+    }
+    .autocomplete-items div:hover {
+      background-color: #f3f4f6;
+    }
+
+    /* Loading Spinner */
+    .spinner {
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #22c55e;
+      border-radius: 50%;
+      width: 14px;
+      height: 14px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Action buttons group */
+    .action-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Ranking list */
+    .rank-list { display:flex; flex-direction:column; gap:8px; }
+    .rank-item {
+      display:flex; align-items:center; gap:10px;
+      padding:8px 10px; border-radius:8px; background:#f8fafc;
+    }
+    .rank-num {
+      width:24px; height:24px; border-radius:50%;
+      background:#0f172a; color:white; font-size:12px;
+      display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    }
+    .rank-bar-wrap { flex:1; }
+    .rank-bar-bg { background:#e5e7eb; border-radius:6px; height:8px; margin-top:4px; overflow:hidden; }
+    .rank-bar-fill { background:#22c55e; height:100%; }
+
+    @media (max-width: 768px) {
+      .col-3, .col-4, .col-6 { flex: 0 0 100%; }
+      header h1 { font-size: 16px; }
+      .toast { right: 10px; left: 10px; max-width: none; }
+      .modal-content { width: 95%; padding: 16px; }
+    }
+  </style>
 </head>
 <body>
-    <div class="main-container">
-        <!-- Header -->
-        <div class="header">
-            <h1><i class="bi bi-youtube"></i> YouTube Views Predictor</h1>
-            <p>Powered by Voting Ensemble Model | 207K+ Videos Analyzed</p>
-            <div class="model-badge">
-                <i class="bi bi-cpu"></i> RMSE: 0.750 | R²: 0.780 | MAE: 0.522
-            </div>
-        </div>
+<header>
+  <h1>📷 Camera Flip Backend</h1>
+  <div class="nav">
+    <button data-page="dashboard" class="active">Dashboard</button>
+    <button data-page="stats">📊 สถิติขายดี</button>
+    <button data-page="inventory">สต็อก</button>
+    <button data-page="sales">ขาย</button>
+    <button data-page="purchases">ซื้อของเข้า</button>
+    <button data-page="repairs">ซ่อม & อะไหล่</button>
+    <button data-page="cash">เงินสด & หนี้</button>
+  </div>
+</header>
 
-        <!-- Main Form -->
-        <div class="card">
-            <div class="card-header">
-                <i class="bi bi-magic"></i> Predict Your Video's Success
-            </div>
-            <div class="card-body p-4">
-                <form id="predictionForm">
-                    <!-- Basic Information -->
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <label class="form-label">
-                                <i class="bi bi-globe2"></i> Target Country
-                            </label>
-                            <select class="form-select" id="country" required>
-                                <option value="">Select Country</option>
-                                <option value="US">🇺🇸 United States</option>
-                                <option value="GB">🇬🇧 United Kingdom</option>
-                                <option value="CA">🇨🇦 Canada</option>
-                                <option value="DE">🇩🇪 Germany</option>
-                                <option value="FR">🇫🇷 France</option>
-                                <option value="IN">🇮🇳 India</option>
-                                <option value="JP">🇯🇵 Japan</option>
-                                <option value="KR">🇰🇷 South Korea</option>
-                                <option value="MX">🇲🇽 Mexico</option>
-                                <option value="RU">🇷🇺 Russia</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">
-                                <i class="bi bi-collection-play-fill"></i> Video Category
-                            </label>
-                            <select class="form-select" id="category" required>
-                                <option value="">Select Category</option>
-                                <option value="Entertainment">🎭 Entertainment</option>
-                                <option value="Music">🎵 Music</option>
-                                <option value="Gaming">🎮 Gaming</option>
-                                <option value="People & Blogs">👥 People & Blogs</option>
-                                <option value="Comedy">😄 Comedy</option>
-                                <option value="News & Politics">📰 News & Politics</option>
-                                <option value="Howto & Style">💡 Howto & Style</option>
-                                <option value="Education">🎓 Education</option>
-                                <option value="Science & Technology">🔬 Science & Technology</option>
-                                <option value="Sports">⚽ Sports</option>
-                                <option value="Film & Animation">🎬 Film & Animation</option>
-                                <option value="Autos & Vehicles">🚗 Autos & Vehicles</option>
-                                <option value="Pets & Animals">🐾 Pets & Animals</option>
-                                <option value="Travel & Events">✈️ Travel & Events</option>
-                                <option value="Nonprofits & Activism">🤝 Nonprofits & Activism</option>
-                            </select>
-                        </div>
-                    </div>
+<!-- Toast Notification -->
+<div id="toast" class="toast"></div>
 
-                    <!-- Title Section -->
-                    <div class="mb-4">
-                        <label class="form-label">
-                            <i class="bi bi-type-bold"></i> Video Title
-                        </label>
-                        <div class="input-group">
-                            <input type="text" class="form-control" id="title" 
-                                   placeholder="Enter your amazing video title here..." 
-                                   maxlength="100" required>
-                            <span class="input-group-text" id="titleLength">0/100</span>
-                        </div>
-                        <small class="text-muted">
-                            <i class="bi bi-info-circle"></i> Optimal: 60-70 characters
-                        </small>
-                    </div>
+<!-- Edit Item Modal -->
+<div id="modal-edit-item" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>แก้ไขสินค้า</h3>
+      <button class="close-modal" onclick="closeModal('modal-edit-item')">&times;</button>
+    </div>
+    <div id="edit-item-form">
+      <input type="hidden" id="edit-item-id">
+      <label>Status
+        <select id="edit-status">
+          <option value="รอเช็ค">รอเช็ค</option>
+          <option value="รอซ่อม">รอซ่อม</option>
+          <option value="พร้อมขาย">พร้อมขาย</option>
+          <option value="ขายแล้ว">ขายแล้ว</option>
+          <option value="คืนลูกค้า">คืนลูกค้า</option>
+          <option value="คืนผู้ขาย">คืนผู้ขาย</option>
+        </select>
+      </label>
+      <label>ราคาขายจริง (ว่าง = ยังไม่ขาย)
+        <input id="edit-sold-price" type="number" step="0.01">
+      </label>
+      <label>วันที่ขาย
+        <input id="edit-sold-at" type="text" placeholder="YYYY-MM-DD">
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('modal-edit-item')">ยกเลิก</button>
+      <button class="btn-primary" onclick="saveItemEdit()">บันทึก</button>
+    </div>
+  </div>
+</div>
 
-                    <!-- Emoji Picker -->
-                    <div class="mb-3">
-                        <label class="form-label">Quick Add Emojis:</label>
-                        <div>
-                            <span class="emoji-btn" onclick="addEmoji('🔥')">🔥</span>
-                            <span class="emoji-btn" onclick="addEmoji('😱')">😱</span>
-                            <span class="emoji-btn" onclick="addEmoji('❤️')">❤️</span>
-                            <span class="emoji-btn" onclick="addEmoji('😂')">😂</span>
-                            <span class="emoji-btn" onclick="addEmoji('🎉')">🎉</span>
-                            <span class="emoji-btn" onclick="addEmoji('💯')">💯</span>
-                            <span class="emoji-btn" onclick="addEmoji('👍')">👍</span>
-                            <span class="emoji-btn" onclick="addEmoji('⭐')">⭐</span>
-                            <span class="emoji-btn" onclick="addEmoji('🚀')">🚀</span>
-                            <span class="emoji-btn" onclick="addEmoji('💪')">💪</span>
-                        </div>
-                    </div>
+<!-- Return to Customer Modal -->
+<div id="modal-return-customer" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>🔄 คืนสินค้า (ลูกค้าคืนเพราะมีปัญหา)</h3>
+      <button class="close-modal" onclick="closeModal('modal-return-customer')">&times;</button>
+    </div>
+    <div>
+      <p style="font-size:13px;color:#6b7280;">สินค้า: <strong id="return-cust-item-name"></strong></p>
+      <p style="font-size:13px;color:#6b7280;">ต้นทุนเดิม: <strong id="return-cust-item-cost"></strong> บาท</p>
+      <p style="font-size:13px;color:#6b7280;">ขายไปที่: <strong id="return-cust-sold-price"></strong> บาท</p>
+      
+      <label>เหตุผลที่คืน
+        <textarea id="return-cust-reason" placeholder="เช่น: ม่านเสีย, Sensor มีปัญหา, ฯลฯ"></textarea>
+      </label>
+      <label>วันที่คืน
+        <input id="return-cust-date" type="text">
+      </label>
+      <label>สถานะหลังคืน
+        <select id="return-cust-new-status">
+          <option value="รอเช็ค">รอเช็ค</option>
+          <option value="รอซ่อม">รอซ่อม</option>
+          <option value="คืนลูกค้า">คืนลูกค้า (ไม่ใช้ต่อ)</option>
+        </select>
+      </label>
+      <label>คืนเงินลูกค้า (บาท)
+        <input id="return-cust-refund-amount" type="number" step="0.01" placeholder="จำนวนเงินที่คืนให้ลูกค้า">
+      </label>
+      <div style="margin-top:12px;padding:8px;background:#fef3c7;border-radius:6px;font-size:13px;">
+        💡 <strong>หมายเหตุ:</strong> ระบบจะอัพเดท status และเคลียร์ข้อมูลการขาย (sold_price, sold_at) เพื่อให้สินค้ากลับมาอยู่ในสต็อกอีกครั้ง
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('modal-return-customer')">ยกเลิก</button>
+      <button class="btn-warning" onclick="saveReturnToCustomer()">บันทึกการคืนสินค้า</button>
+    </div>
+  </div>
+</div>
 
-                    <!-- Tags and Description -->
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <label class="form-label">
-                                <i class="bi bi-tags-fill"></i> Number of Tags
-                            </label>
-                            <input type="number" class="form-control" id="tags" 
-                                   min="0" max="50" value="12" required>
-                            <small class="text-muted">Optimal: 10-15 tags</small>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">
-                                <i class="bi bi-text-left"></i> Description Length
-                            </label>
-                            <input type="number" class="form-control" id="descLength" 
-                                   min="0" max="5000" value="800" required>
-                            <small class="text-muted">Characters (500-1500 optimal)</small>
-                        </div>
-                    </div>
+<!-- Return to Seller Modal -->
+<div id="modal-return-seller" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>↩️ คืนสินค้าให้ผู้ขาย (เราคืนเพราะมีปัญหา)</h3>
+      <button class="close-modal" onclick="closeModal('modal-return-seller')">&times;</button>
+    </div>
+    <div>
+      <p style="font-size:13px;color:#6b7280;">สินค้า: <strong id="return-seller-item-name"></strong></p>
+      <p style="font-size:13px;color:#6b7280;">ต้นทุนเดิม: <strong id="return-seller-item-cost"></strong> บาท</p>
+      
+      <label>เหตุผลที่คืน
+        <textarea id="return-seller-reason" placeholder="เช่น: ซื้อมาแล้วพบว่า Sensor เสีย, ไม่ตรงสเปค, ฯลฯ"></textarea>
+      </label>
+      <label>วันที่คืน
+        <input id="return-seller-date" type="text">
+      </label>
+      <label>ได้เงินคืนจากผู้ขาย (บาท)
+        <input id="return-seller-refund" type="number" step="0.01" placeholder="จำนวนเงินที่ได้คืนจากผู้ขาย (เต็มจำนวนหรือบางส่วน)">
+      </label>
+      <label>การจัดการสินค้า
+        <select id="return-seller-action">
+          <option value="remove">ลบออกจากสต็อก (คืนผู้ขายแล้ว)</option>
+          <option value="keep">เก็บไว้ในสต็อก (status: คืนผู้ขาย)</option>
+        </select>
+      </label>
+      <div style="margin-top:12px;padding:8px;background:#dbeafe;border-radius:6px;font-size:13px;">
+        💡 <strong>คำอธิบาย:</strong><br>
+        • <strong>ลบออก</strong>: ใช้เมื่อคืนสินค้าและได้เงินคืนเต็มจำนวน ไม่มีสินค้าอยู่แล้ว<br>
+        • <strong>เก็บไว้</strong>: ใช้เมื่อคืนได้บางส่วน หรือต้องการเก็บประวัติไว้ดู
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('modal-return-seller')">ยกเลิก</button>
+      <button class="btn-info" onclick="saveReturnToSeller()">บันทึกการคืนให้ผู้ขาย</button>
+    </div>
+  </div>
+</div>
 
-                    <!-- Publishing Time -->
-                    <div class="row mb-4">
-                        <div class="col-md-4">
-                            <label class="form-label">
-                                <i class="bi bi-clock-fill"></i> Publish Hour (UTC)
-                            </label>
-                            <select class="form-select" id="publishHour" required>
-                                <option value="15" selected>15:00 (3 PM)</option>
-                                <option value="0">00:00 (Midnight)</option>
-                                <option value="1">01:00</option>
-                                <option value="2">02:00</option>
-                                <option value="3">03:00</option>
-                                <option value="4">04:00</option>
-                                <option value="5">05:00</option>
-                                <option value="6">06:00</option>
-                                <option value="7">07:00</option>
-                                <option value="8">08:00</option>
-                                <option value="9">09:00</option>
-                                <option value="10">10:00</option>
-                                <option value="11">11:00</option>
-                                <option value="12">12:00 (Noon)</option>
-                                <option value="13">13:00</option>
-                                <option value="14">14:00</option>
-                                <option value="16">16:00</option>
-                                <option value="17">17:00</option>
-                                <option value="18">18:00</option>
-                                <option value="19">19:00</option>
-                                <option value="20">20:00</option>
-                                <option value="21">21:00</option>
-                                <option value="22">22:00</option>
-                                <option value="23">23:00</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">
-                                <i class="bi bi-calendar-week-fill"></i> Day of Week
-                            </label>
-                            <select class="form-select" id="publishDow" required>
-                                <option value="4" selected>Friday</option>
-                                <option value="0">Monday</option>
-                                <option value="1">Tuesday</option>
-                                <option value="2">Wednesday</option>
-                                <option value="3">Thursday</option>
-                                <option value="5">Saturday</option>
-                                <option value="6">Sunday</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">
-                                <i class="bi bi-calendar-month-fill"></i> Month
-                            </label>
-                            <select class="form-select" id="publishMonth" required>
-                                <option value="1">January</option>
-                                <option value="2">February</option>
-                                <option value="3">March</option>
-                                <option value="4">April</option>
-                                <option value="5">May</option>
-                                <option value="6">June</option>
-                                <option value="7">July</option>
-                                <option value="8">August</option>
-                                <option value="9">September</option>
-                                <option value="10">October</option>
-                                <option value="11">November</option>
-                                <option value="12">December</option>
-                            </select>
-                        </div>
-                    </div>
+<!-- Adjust Cost Modal -->
+<div id="modal-adjust-cost" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>💰 แก้ไขต้นทุน</h3>
+      <button class="close-modal" onclick="closeModal('modal-adjust-cost')">&times;</button>
+    </div>
+    <div>
+      <p style="font-size:13px;color:#6b7280;">สินค้า: <strong id="adjust-item-name"></strong></p>
+      <p style="font-size:13px;color:#6b7280;">ต้นทุนปัจจุบัน: <strong id="adjust-item-cost"></strong> บาท</p>
+      
+      <label>ต้นทุนซื้อ (base_cost)
+        <input id="adjust-base-cost" type="number" step="0.01">
+      </label>
+      <label>ค่าซ่อม (repair_cost)
+        <input id="adjust-repair-cost" type="number" step="0.01">
+      </label>
+      <label>ค่าใช้จ่ายอื่นๆ (other_cost)
+        <input id="adjust-other-cost" type="number" step="0.01">
+      </label>
+      <label>เหตุผลในการแก้ไข
+        <textarea id="adjust-reason" placeholder="เช่น: ได้คืนเงินจากผู้ขาย 500 บาท, ค่าซ่อมเพิ่มเติม, ฯลฯ"></textarea>
+      </label>
+      <div id="adjust-cost-preview" style="margin-top:12px;padding:8px;background:#e0f2fe;border-radius:6px;font-size:13px;">
+        <strong>ต้นทุนรวมใหม่:</strong> <span id="new-total-cost">-</span> บาท
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('modal-adjust-cost')">ยกเลิก</button>
+      <button class="btn-primary" onclick="saveAdjustCost()">บันทึกการแก้ไข</button>
+    </div>
+  </div>
+</div>
 
-                    <!-- Channel Information -->
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <label class="form-label">
-                                <i class="bi bi-broadcast-pin"></i> Previous Videos on Channel
-                            </label>
-                            <input type="number" class="form-control" id="channelVideos" 
-                                   min="0" max="10000" value="50" required>
-                            <small class="text-muted">How many videos have you published?</small>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">
-                                <i class="bi bi-graph-up-arrow"></i> Average Views (Previous Videos)
-                            </label>
-                            <input type="number" class="form-control" id="avgViews" 
-                                   min="0" value="10000" required>
-                            <small class="text-muted">Your channel's typical performance</small>
-                        </div>
-                    </div>
+<!-- Delete Item Modal -->
+<div id="modal-delete-item" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>🗑️ ลบสต็อก</h3>
+      <button class="close-modal" onclick="closeModal('modal-delete-item')">&times;</button>
+    </div>
+    <div>
+      <p style="font-size:13px;color:#6b7280;">สินค้า: <strong id="delete-item-name"></strong></p>
+      <p style="font-size:13px;color:#6b7280;">ID: <strong id="delete-item-id"></strong></p>
+      
+      <div style="margin-top:12px;padding:12px;background:#fecaca;border-radius:6px;font-size:13px;">
+        ⚠️ <strong>คำเตือน:</strong> การลบข้อมูลไม่สามารถกู้คืนได้! คุณแน่ใจหรือไม่?
+      </div>
+      
+      <label style="margin-top:12px;">เหตุผลในการลบ (ไม่บังคับ)
+        <textarea id="delete-reason" placeholder="เช่น: ข้อมูลซ้ำ, ป้อนข้อมูลผิด, ฯลฯ"></textarea>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('modal-delete-item')">ยกเลิก</button>
+      <button class="btn-danger" onclick="confirmDeleteItem()">ยืนยันการลบ</button>
+    </div>
+  </div>
+</div>
 
-                    <!-- Submit Button -->
-                    <div class="text-center">
-                        <button type="submit" class="btn btn-predict">
-                            <i class="bi bi-stars"></i> Predict Views Now
-                        </button>
-                    </div>
-                </form>
+<div id="page-dashboard" class="page">
+  <div class="card" style="background:transparent; box-shadow:none; padding:0;">
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">ของค้างสต็อก (ชิ้น)</div>
+        <div class="stat-value" id="stat-stock-count">-</div>
+        <div class="stat-sub">ชิ้นที่ยังไม่ขาย</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">มูลค่าต้นทุนสต็อก</div>
+        <div class="stat-value" id="stat-stock-value">-</div>
+        <div class="stat-sub">บาท</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">กำไรเดือนนี้</div>
+        <div class="stat-value" id="stat-profit-month">-</div>
+        <div class="stat-sub">บาท (จากสินค้าที่ขายแล้ว)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">กำไรรวมทั้งหมด</div>
+        <div class="stat-value" id="stat-profit-total">-</div>
+        <div class="stat-sub">บาท</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">เงินสดคงเหลือในร้าน</div>
+        <div class="stat-value" id="stat-cash">-</div>
+        <div class="stat-sub">รวมทุกบัญชี (ตาม CashMovements)</div>
+      </div>
+    </div>
+  </div>
 
-                <!-- Loading Animation -->
-                <div class="loading" id="loading">
-                    <div class="spinner-border text-danger" role="status">
-                        <span class="visually-hidden">Analyzing...</span>
-                    </div>
-                    <p class="mt-3">🤖 AI is analyzing your video potential...</p>
-                </div>
+  <div class="card">
+    <h2>กำไรต่อเดือน</h2>
+    <canvas id="chart-profit-month"></canvas>
+  </div>
+</div>
 
-                <!-- Results Section -->
-                <div class="result-box" id="results">
-                    <h3 class="text-center mb-4">
-                        <i class="bi bi-graph-up-arrow"></i> AI Prediction Results
-                    </h3>
-                    
-                    <div class="predicted-views" id="predictedViews">
-                        <!-- Will be filled by JavaScript -->
-                    </div>
-                    
-                    <div class="confidence-bar">
-                        <div class="confidence-fill" id="confidenceBar" style="width: 0%">
-                            <!-- Confidence percentage -->
-                        </div>
-                    </div>
-                    
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-value" id="minViews">-</div>
-                            <div class="stat-label">Minimum Expected</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value" id="maxViews">-</div>
-                            <div class="stat-label">Maximum Potential</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value" id="engagement">-</div>
-                            <div class="stat-label">Engagement Rate</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value" id="viralChance">-</div>
-                            <div class="stat-label">Viral Potential</div>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-4">
-                        <h5><i class="bi bi-trophy-fill"></i> Top Contributing Factors:</h5>
-                        <div id="topFactors">
-                            <!-- Will be filled by JavaScript -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+<!-- STATS / BEST SELLERS -->
+<div id="page-stats" class="page" style="display:none;">
+  <div class="card" style="background:transparent; box-shadow:none; padding:0;">
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">ขายแล้วทั้งหมด</div>
+        <div class="stat-value" id="stat2-sold-count">-</div>
+        <div class="stat-sub">ชิ้น</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">ยอดขายรวม</div>
+        <div class="stat-value" id="stat2-revenue">-</div>
+        <div class="stat-sub">บาท</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">กำไรรวม (จากของที่ขายแล้ว)</div>
+        <div class="stat-value" id="stat2-profit">-</div>
+        <div class="stat-sub">บาท</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Margin เฉลี่ย</div>
+        <div class="stat-value" id="stat2-margin">-</div>
+        <div class="stat-sub">% ของราคาขาย</div>
+      </div>
+    </div>
+  </div>
 
-        <!-- Tips Section -->
-        <div class="tips-section">
-            <h4><i class="bi bi-lightbulb-fill"></i> Pro Tips for Maximum Views</h4>
-            <div class="tip-item">
-                <strong>🕐 Best Time:</strong> Upload at 15:00 UTC on Fridays for maximum reach
-            </div>
-            <div class="tip-item">
-                <strong>📝 Title Length:</strong> Keep it between 60-70 characters for optimal engagement
-            </div>
-            <div class="tip-item">
-                <strong>🏷️ Tags:</strong> Use 10-15 relevant tags to improve discoverability
-            </div>
-            <div class="tip-item">
-                <strong>🎵 Category:</strong> Music and Entertainment videos tend to get the most views
-            </div>
-            <div class="tip-item">
-                <strong>😊 Emojis:</strong> 1-2 emojis can increase click-through rate significantly
-            </div>
-            <div class="tip-item">
-                <strong>📺 Channel History:</strong> Your previous performance is the strongest predictor
-            </div>
-        </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <h2>สินค้าขายดีที่สุด</h2>
+      <div class="filter-tabs" style="margin-bottom:0;">
+        <button class="active" data-rankby="count">ตามจำนวนที่ขาย</button>
+        <button data-rankby="profit">ตามกำไรรวม</button>
+        <button data-rankby="revenue">ตามยอดขายรวม</button>
+      </div>
+    </div>
+    <p style="font-size:12px;color:#6b7280;">จัดกลุ่มตามยี่ห้อ + รุ่น จากสินค้าที่ status เป็น "ขายแล้ว"</p>
+    <div id="rank-brand-model" class="rank-list"></div>
+  </div>
 
-        <!-- Footer -->
-        <div class="text-center text-white mt-5 pb-3">
-            <p>Built with ❤️ using Machine Learning | Dataset: 207,148 Unique Videos</p>
-            <p><small>Voting Ensemble Model | RMSE: 0.750 | R²: 0.780 | MAE: 0.522</small></p>
-            <p><small>© 2024 YouTube Views Predictor | Educational Purpose Only</small></p>
-        </div>
+  <div class="row">
+    <div class="col-6">
+      <div class="card">
+        <h2>ขายดีตามหมวดหมู่</h2>
+        <canvas id="chart-category"></canvas>
+      </div>
+    </div>
+    <div class="col-6">
+      <div class="card">
+        <h2>ขายดีตามยี่ห้อ</h2>
+        <canvas id="chart-brand"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>กำไรสูงสุด/ต่ำสุด รายชิ้น (Top 10)</h2>
+    <div style="max-height:360px;overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>สินค้า</th>
+            <th>ต้นทุน</th>
+            <th>ขายจริง</th>
+            <th>กำไร</th>
+            <th>Margin %</th>
+            <th>วันที่ขาย</th>
+          </tr>
+        </thead>
+        <tbody id="rank-top-items-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- INVENTORY -->
+<div id="page-inventory" class="page" style="display:none;">
+  <div class="card">
+    <h2>เพิ่มสินค้าเข้าสต็อก</h2>
+    <div class="row">
+      <div class="col-3">
+        <label>หมวดหมู่
+          <select id="inv-category">
+            <option value="Camera Body">Camera Body</option>
+            <option value="Lens">Lens</option>
+            <option value="Flash">Flash</option>
+            <option value="Accessory">Accessory</option>
+          </select>
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ยี่ห้อ (Brand)
+          <input id="inv-brand" placeholder="Canon / Sony / Sigma" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>รุ่น (Model)
+          <input id="inv-model" placeholder="1DX II / 5D4 / ฯลฯ" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>Serial Number
+          <input id="inv-sn" />
+        </label>
+      </div>
+
+      <div class="col-3">
+        <label>สภาพ (A / B+ / ตำหนิ)
+          <input id="inv-condition" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>Status
+          <select id="inv-status">
+            <option value="รอเช็ค">รอเช็ค</option>
+            <option value="รอซ่อม">รอซ่อม</option>
+            <option value="พร้อมขาย">พร้อมขาย</option>
+          </select>
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ต้นทุนซื้อ (base_cost)
+          <input id="inv-base-cost" type="number" step="0.01" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ค่าซ่อมเริ่มต้น (repair_cost)
+          <input id="inv-repair-cost" type="number" step="0.01" value="0" />
+        </label>
+      </div>
+
+      <div class="col-3">
+        <label>ค่าอื่นๆ (ค่าส่ง ฯลฯ)
+          <input id="inv-other-cost" type="number" step="0.01" value="0" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ราคาตั้งขาย (list_price)
+          <input id="inv-list-price" type="number" step="0.01" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>วันที่รับของ (YYYY-MM-DD)
+          <input id="inv-received-at" />
+        </label>
+      </div>
+    </div>
+    <br>
+    <button class="btn-primary" id="btn-inv-add">
+      <span id="btn-inv-add-text">บันทึกสินค้า</span>
+    </button>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2>รายการสต็อก</h2>
+      <button class="btn-outline" id="btn-inv-reload">รีเฟรช</button>
+    </div>
+    
+    <!-- Filter Tabs -->
+    <div class="filter-tabs">
+      <button class="active" data-filter="available">พร้อมขาย</button>
+      <button data-filter="sold">ขายแล้ว</button>
+      <button data-filter="repair">รอซ่อม</button>
+      <button data-filter="returned-customer">คืนลูกค้า</button>
+      <button data-filter="returned-seller">คืนผู้ขาย</button>
+      <button data-filter="all">ทั้งหมด</button>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Real model coefficients from trained Voting Ensemble
-        const modelCoefficients = {
-            base: 13.80,  // Average log views from training
-            country: {
-                'US': 0.116, 'GB': 1.045, 'CA': -0.010, 'DE': -0.187,
-                'FR': -0.298, 'IN': -0.045, 'JP': -0.385, 'KR': -0.212,
-                'MX': -0.354, 'RU': -0.450
-            },
-            category: {
-                'Entertainment': 0.033, 'Music': 0.327, 'Gaming': -0.100,
-                'People & Blogs': 0.014, 'Comedy': -0.033, 'News & Politics': 0.230,
-                'Howto & Style': -0.117, 'Education': -0.238, 'Science & Technology': -0.075,
-                'Sports': 0.236, 'Film & Animation': 0.029, 'Autos & Vehicles': -0.058,
-                'Pets & Animals': -0.147, 'Travel & Events': -0.193, 'Nonprofits & Activism': -0.279
-            },
-            features: {
-                publishHour: -0.01,
-                publishDow: -0.001,
-                publishMonth: -0.009,
-                titleLength: 0.0014,
-                tags: 0.0002,
-                descLength: 0.000004,
-                channelPrevCount: 0.0004,
-                upperRatio: -0.08,
-                exclamation: -0.01,
-                question: -0.05,
-                emoji: 0.05,
-                channelMedianViews: 0.9  // Most important factor
-            }
+    <div id="inv-summary" style="font-size:13px;margin-bottom:8px;"></div>
+    <div style="max-height:420px;overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>สินค้า</th>
+            <th>SN</th>
+            <th>สภาพ</th>
+            <th>Status</th>
+            <th>ต้นทุน</th>
+            <th>ตั้งขาย</th>
+            <th>ขายจริง</th>
+            <th>รับของ</th>
+            <th>ขาย</th>
+            <th>กำไร</th>
+            <th>จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="inv-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- SALES -->
+<div id="page-sales" class="page" style="display:none;">
+  <div class="card">
+    <h2>ออกบิลขายแบบเร็ว</h2>
+    <p style="font-size:13px;color:#6b7280;">💡 พิมพ์ ID, ยี่ห้อ หรือรุ่นเพื่อค้นหาสินค้า</p>
+    <div class="row">
+      <div class="col-3">
+        <label>วันที่ขาย
+          <input id="sale-date" placeholder="2025-12-29" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ชื่อลูกค้า
+          <input id="sale-customer" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ช่องทาง
+          <input id="sale-channel" placeholder="FB / Shopee / หน้าร้าน" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>วิธีจ่าย
+          <input id="sale-payment" placeholder="โอน / สด / COD" />
+        </label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-4">
+        <label>เลขพัสดุส่งลูกค้า
+          <input id="sale-tracking" />
+        </label>
+      </div>
+      <div class="col-4">
+        <label>ค่าส่ง (บวก/ลบรวมในเงินที่ได้)
+          <input id="sale-ship" type="number" step="0.01" value="0" />
+        </label>
+      </div>
+      <div class="col-4">
+        <label>ค่าธรรมเนียมแพลตฟอร์ม
+          <input id="sale-fee" type="number" step="0.01" value="0" />
+        </label>
+      </div>
+    </div>
+
+    <hr style="margin:12px 0;">
+
+    <div class="row">
+      <div class="col-4">
+        <label>ค้นหาสินค้า (พิมพ์เพื่อค้นหา)
+          <div class="autocomplete">
+            <input id="sale-item-search" placeholder="พิมพ์ ID / ยี่ห้อ / รุ่น..." autocomplete="off" />
+            <div id="autocomplete-list" class="autocomplete-items"></div>
+          </div>
+        </label>
+      </div>
+      <div class="col-4">
+        <label>ราคาขายจริง (ต่อชิ้น)
+          <input id="sale-price" type="number" step="0.01" />
+        </label>
+      </div>
+      <div class="col-4">
+        <label>ส่วนลด
+          <input id="sale-discount" type="number" step="0.01" value="0" />
+        </label>
+      </div>
+    </div>
+
+    <div id="selected-item-preview" style="margin-top:8px;padding:8px;background:#f3f4f6;border-radius:6px;font-size:13px;display:none;">
+      <strong>สินค้าที่เลือก:</strong> <span id="preview-text"></span>
+    </div>
+
+    <br>
+    <button class="btn-primary" id="btn-sale-submit">
+      <span id="btn-sale-submit-text">บันทึกการขาย</span>
+    </button>
+  </div>
+
+  <div class="card">
+    <h2>ประวัติการขาย (ล่าสุด 50 รายการ)</h2>
+    <div style="max-height:420px;overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>วันที่</th>
+            <th>บิล</th>
+            <th>ลูกค้า</th>
+            <th>ช่องทาง</th>
+            <th>จำนวนสินค้า</th>
+            <th>ยอดรวมขาย</th>
+          </tr>
+        </thead>
+        <tbody id="sales-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- PURCHASES -->
+<div id="page-purchases" class="page" style="display:none;">
+  <div class="card">
+    <h2>บันทึกการซื้อของเข้า</h2>
+    <div class="row">
+      <div class="col-3">
+        <label>วันที่ซื้อ
+          <input id="pur-date" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ชื่อผู้ขาย
+          <input id="pur-seller" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ช่องทาง
+          <input id="pur-channel" placeholder="FB กลุ่ม / Marketplace ฯลฯ" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>วิธีจ่าย
+          <input id="pur-payment" placeholder="โอน / สด" />
+        </label>
+      </div>
+
+      <div class="col-3">
+        <label>จ่ายจากบัญชี
+          <input id="pur-account" placeholder="MAIN / KBank ฯลฯ" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ยอดรวมที่จ่าย
+          <input id="pur-amount" type="number" step="0.01" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>เลขพัสดุขาเข้า
+          <input id="pur-track" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>โน้ต
+          <input id="pur-note" />
+        </label>
+      </div>
+    </div>
+    <br>
+    <button class="btn-primary" id="btn-pur-submit">
+      <span id="btn-pur-submit-text">บันทึกการซื้อ</span>
+    </button>
+  </div>
+
+  <div class="card">
+    <h2>ประวัติการซื้อ (ล่าสุด 50 รายการ)</h2>
+    <div style="max-height:420px;overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>วันที่</th>
+            <th>ID</th>
+            <th>ผู้ขาย</th>
+            <th>ช่องทาง</th>
+            <th>ยอดรวม</th>
+            <th>เลขพัสดุ</th>
+          </tr>
+        </thead>
+        <tbody id="pur-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- REPAIRS -->
+<div id="page-repairs" class="page" style="display:none;">
+  <div class="card">
+    <h2>บันทึกงานซ่อม</h2>
+    <div class="row">
+      <div class="col-3">
+        <label>Item ID ที่ซ่อม
+          <input id="rep-item-id" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>วันที่ส่งซ่อม
+          <input id="rep-send" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>วันที่ซ่อมเสร็จ
+          <input id="rep-done" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ร้านซ่อม / ซ่อมเอง
+          <input id="rep-shop" />
+        </label>
+      </div>
+
+      <div class="col-6">
+        <label>อาการสินค้า
+          <input id="rep-problem" />
+        </label>
+      </div>
+      <div class="col-6">
+        <label>วิธีซ่อม / สิ่งที่ทำ
+          <input id="rep-actions" />
+        </label>
+      </div>
+
+      <div class="col-3">
+        <label>ค่าแรงช่าง
+          <input id="rep-labor" type="number" step="0.01" value="0" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>Part ID (อะไหล่หลัก 1 ชิ้น เช่น ม่าน ฯลฯ)
+          <input id="rep-part-id" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>จำนวนอะไหล่ที่ใช้
+          <input id="rep-part-qty" type="number" step="1" value="0" />
+        </label>
+      </div>
+    </div>
+    <br>
+    <button class="btn-primary" id="btn-rep-submit">
+      <span id="btn-rep-submit-text">บันทึกการซ่อม</span>
+    </button>
+  </div>
+
+  <div class="card">
+    <h2>อะไหล่ในสต็อก</h2>
+    <div class="row">
+      <div class="col-4">
+        <label>ชื่ออะไหล่
+          <input id="part-name" />
+        </label>
+      </div>
+      <div class="col-4">
+        <label>รุ่นที่ใช้ได้ (โน้ต)
+          <input id="part-models" />
+        </label>
+      </div>
+      <div class="col-2">
+        <label>จำนวนเริ่มต้น
+          <input id="part-qty" type="number" />
+        </label>
+      </div>
+      <div class="col-2">
+        <label>ต้นทุน/ชิ้น
+          <input id="part-cost" type="number" step="0.01" />
+        </label>
+      </div>
+    </div>
+    <br>
+    <button class="btn-primary" id="btn-part-submit">
+      <span id="btn-part-submit-text">เพิ่มอะไหล่ใหม่</span>
+    </button>
+
+    <hr style="margin:12px 0;">
+
+    <div style="max-height:320px;overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Part ID</th>
+            <th>ชื่ออะไหล่</th>
+            <th>รุ่นที่ใช้ได้</th>
+            <th>คงเหลือ</th>
+            <th>ต้นทุน/ชิ้น</th>
+          </tr>
+        </thead>
+        <tbody id="parts-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- CASH & LOANS -->
+<div id="page-cash" class="page" style="display:none;">
+  <div class="card">
+    <h2>สรุปเงินสด & หนี้ (อ่านอย่างเดียว จาก Dashboard/CashMovements)</h2>
+    <p style="font-size:13px;">
+      ยอดเงินสดคงเหลือและหนี้สินทั้งหมดคุณดูจาก Dashboard Summary และชีต CashMovements / Loans โดยตรงได้เลย<br>
+      ถ้าอยากเพิ่มเงินกู้ / กู้เงิน: ใช้ฟอร์มด้านล่าง
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>บันทึกเงินกู้ใหม่</h2>
+    <div class="row">
+      <div class="col-3">
+        <label>ชื่อเจ้าหนี้
+          <input id="loan-lender" placeholder="แม่ / เพื่อน / ธนาคาร" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>วันที่กู้
+          <input id="loan-date" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ยอดเงินกู้ (Principal)
+          <input id="loan-amount" type="number" step="0.01" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ดอกเบี้ย (% ต่อปี หรือแล้วแต่คุณนิยาม)
+          <input id="loan-rate" type="number" step="0.01" />
+        </label>
+      </div>
+      <div class="col-3">
+        <label>ยอดผ่อนต่องวด (ถ้ามี)
+          <input id="loan-install" type="number" step="0.01" />
+        </label>
+      </div>
+      <div class="col-9">
+        <label>โน้ต
+          <input id="loan-note" />
+        </label>
+      </div>
+    </div>
+    <br>
+    <button class="btn-primary" id="btn-loan-submit">
+      <span id="btn-loan-submit-text">บันทึกเงินกู้</span>
+    </button>
+  </div>
+
+  <div class="card">
+    <h2>รายการเงินกู้</h2>
+    <div style="max-height:320px;overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>เจ้าหนี้</th>
+            <th>วันที่เริ่ม</th>
+            <th>ยอดกู้</th>
+            <th>ยอดคงเหลือ</th>
+            <th>ดอกเบี้ย</th>
+          </tr>
+        </thead>
+        <tbody id="loans-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbyy50AuscxPb2ODSPyf2oMB2-dcdPF5tbasZSg4P9FEFoWUsQUdwcNXjF9nq0aAtE5f3g/exec';
+  
+  let allItems = [];
+  let currentFilter = 'available';
+  let currentEditItem = null;
+  let currentRankBy = 'count';
+
+  function showToast(message, isError = false) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = 'toast show' + (isError ? ' error' : '');
+    setTimeout(() => toast.className = 'toast', 3000);
+  }
+
+  function openModal(modalId) {
+    document.getElementById(modalId).classList.add('show');
+  }
+
+  function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('show');
+  }
+
+  async function apiGet(params) {
+    const url = new URL(API_BASE_URL);
+    Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
+    const res = await fetch(url.toString());
+    return res.json();
+  }
+  
+  async function apiPost(action, data) {
+    const url = new URL(API_BASE_URL);
+    url.searchParams.set('action', action);
+    
+    const formData = new FormData();
+    formData.append('payload', JSON.stringify(data));
+    
+    const res = await fetch(url.toString(), {
+      method: 'POST',
+      body: formData
+    });
+    return res.json();
+  }
+  
+  function money(n) {
+    const num = Number(n || 0);
+    if (isNaN(num)) return '-';
+    return num.toLocaleString('th-TH', {maximumFractionDigits:0});
+  }
+  
+  function tagClass(status) {
+    if (!status) return 'tag';
+    if (status.includes('คืนผู้ขาย')) return 'tag returned-seller';
+    if (status.includes('คืน')) return 'tag returned';
+    if (status.includes('ขาย')) return 'tag sold';
+    if (status.includes('ซ่อม')) return 'tag repair';
+    if (status.includes('พร้อม')) return 'tag ready';
+    return 'tag';
+  }
+
+  function setButtonLoading(buttonId, isLoading, originalText = 'บันทึก') {
+    const btn = document.getElementById(buttonId);
+    const textSpan = document.getElementById(buttonId + '-text');
+    if (isLoading) {
+      btn.disabled = true;
+      textSpan.innerHTML = '<span class="spinner"></span> กำลังบันทึก...';
+    } else {
+      btn.disabled = false;
+      textSpan.textContent = originalText;
+    }
+  }
+
+  document.querySelectorAll('.nav button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const page = btn.dataset.page;
+      document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+      document.getElementById('page-' + page).style.display = 'block';
+      if (page === 'stats') renderStats();
+    });
+  });
+
+  /******** DASHBOARD ********/
+  let profitChart;
+  async function loadDashboard() {
+    try {
+      const res = await apiGet({action:'dashboardSummary'});
+      if (!res.ok) throw new Error(res.error || 'error');
+      const d = res.data;
+      document.getElementById('stat-stock-count').textContent = d.stockCount;
+      document.getElementById('stat-stock-value').textContent = money(d.stockValue);
+      document.getElementById('stat-profit-month').textContent = money(d.profitThisMonth);
+      document.getElementById('stat-profit-total').textContent = money(d.profitTotal);
+      document.getElementById('stat-cash').textContent = money(d.cashBalance);
+
+      const labels = d.profitByMonth.map(x => x.month);
+      const values = d.profitByMonth.map(x => x.profit);
+
+      const ctx = document.getElementById('chart-profit-month').getContext('2d');
+      if (profitChart) profitChart.destroy();
+      profitChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'กำไรต่อเดือน (บาท)',
+            data: values,
+            borderColor: '#22c55e',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive:true,
+          scales:{ y:{ beginAtZero:true } }
+        }
+      });
+    } catch (err) {
+      console.error(err);
+      showToast('โหลด Dashboard ไม่สำเร็จ', true);
+    }
+  }
+
+  /******** STATS / BEST SELLERS ********/
+  let categoryChart, brandChart;
+
+  function getSoldItems() {
+    // "ขายแล้ว" = has sold_price and not currently a return status
+    return allItems.filter(it => {
+      const hasSold = it.sold_price !== '' && it.sold_price !== null && it.sold_price !== undefined && Number(it.sold_price) > 0;
+      const isReturned = it.status && it.status.includes('คืน');
+      return hasSold && !isReturned;
+    });
+  }
+
+  function groupBy(items, keyFn) {
+    const map = {};
+    items.forEach(it => {
+      const key = keyFn(it) || 'ไม่ระบุ';
+      if (!map[key]) map[key] = { key, count: 0, revenue: 0, cost: 0, profit: 0 };
+      const sold = Number(it.sold_price || 0);
+      const cost = Number(it.total_cost || 0);
+      map[key].count += 1;
+      map[key].revenue += sold;
+      map[key].cost += cost;
+      map[key].profit += (sold - cost);
+    });
+    return Object.values(map);
+  }
+
+  function renderStats() {
+    const sold = getSoldItems();
+
+    // top stat cards
+    const totalRevenue = sold.reduce((s,it) => s + Number(it.sold_price||0), 0);
+    const totalCost = sold.reduce((s,it) => s + Number(it.total_cost||0), 0);
+    const totalProfit = totalRevenue - totalCost;
+    const avgMargin = totalRevenue > 0 ? (totalProfit / totalRevenue * 100) : 0;
+
+    document.getElementById('stat2-sold-count').textContent = sold.length;
+    document.getElementById('stat2-revenue').textContent = money(totalRevenue);
+    document.getElementById('stat2-profit').textContent = money(totalProfit);
+    document.getElementById('stat2-margin').textContent = avgMargin.toFixed(1) + '%';
+
+    // group by brand+model
+    const byBrandModel = groupBy(sold, it => `${it.brand||''} ${it.model||''}`.trim());
+    renderRankBrandModel(byBrandModel);
+
+    // group by category
+    const byCategory = groupBy(sold, it => it.category);
+    renderPieChart('chart-category', byCategory, 'categoryChart');
+
+    // group by brand
+    const byBrand = groupBy(sold, it => it.brand);
+    renderPieChart('chart-brand', byBrand, 'brandChart');
+
+    // top/bottom profit items
+    renderTopItems(sold);
+  }
+
+  function renderRankBrandModel(groups) {
+    const sortKey = currentRankBy; // count | profit | revenue
+    const sorted = groups.slice().sort((a,b) => b[sortKey] - a[sortKey]).slice(0, 10);
+    const maxVal = sorted.length ? sorted[0][sortKey] : 1;
+
+    const container = document.getElementById('rank-brand-model');
+    container.innerHTML = '';
+    if (!sorted.length) {
+      container.innerHTML = '<p style="font-size:13px;color:#6b7280;">ยังไม่มีสินค้าที่ขายแล้ว</p>';
+      return;
+    }
+    sorted.forEach((g, idx) => {
+      const pct = maxVal > 0 ? Math.max(4, (g[sortKey]/maxVal*100)) : 0;
+      let valueLabel = '';
+      if (sortKey === 'count') valueLabel = `${g.count} ชิ้น`;
+      else if (sortKey === 'profit') valueLabel = `กำไร ${money(g.profit)} บาท`;
+      else valueLabel = `ยอดขาย ${money(g.revenue)} บาท`;
+
+      const div = document.createElement('div');
+      div.className = 'rank-item';
+      div.innerHTML = `
+        <div class="rank-num">${idx+1}</div>
+        <div class="rank-bar-wrap">
+          <div style="display:flex;justify-content:space-between;font-size:13px;">
+            <strong>${g.key}</strong>
+            <span>${valueLabel}</span>
+          </div>
+          <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${pct}%;"></div></div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px;">
+            ขาย ${g.count} ชิ้น | ยอดขาย ${money(g.revenue)} | กำไร ${money(g.profit)}
+          </div>
+        </div>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  document.querySelectorAll('[data-rankby]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-rankby]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentRankBy = btn.dataset.rankby;
+      renderStats();
+    });
+  });
+
+  const chartInstances = {};
+  function renderPieChart(canvasId, groups, instanceKey) {
+    const sorted = groups.slice().sort((a,b) => b.count - a.count).slice(0, 8);
+    const labels = sorted.map(g => g.key);
+    const data = sorted.map(g => g.count);
+    const colors = ['#22c55e','#3b82f6','#f59e0b','#ef4444','#a855f7','#06b6d4','#eab308','#64748b'];
+
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    if (chartInstances[instanceKey]) chartInstances[instanceKey].destroy();
+    chartInstances[instanceKey] = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } }
+      }
+    });
+  }
+
+  function renderTopItems(sold) {
+    const withMargin = sold.map(it => {
+      const cost = Number(it.total_cost||0);
+      const price = Number(it.sold_price||0);
+      const profit = price - cost;
+      const margin = price > 0 ? (profit/price*100) : 0;
+      return { ...it, _profit: profit, _margin: margin };
+    });
+    const top = withMargin.slice().sort((a,b) => b._profit - a._profit).slice(0,5);
+    const bottom = withMargin.slice().sort((a,b) => a._profit - b._profit).slice(0,5);
+    const combined = [...top, ...bottom];
+
+    const tbody = document.getElementById('rank-top-items-tbody');
+    tbody.innerHTML = '';
+    combined.forEach(it => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${it.id}</td>
+        <td>${it.brand||''} ${it.model||''}</td>
+        <td>${money(it.total_cost)}</td>
+        <td>${money(it.sold_price)}</td>
+        <td style="color:${it._profit>0?'green':(it._profit<0?'red':'#555')}">${money(it._profit)}</td>
+        <td>${it._margin.toFixed(1)}%</td>
+        <td>${it.sold_at||''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  /******** INVENTORY ********/
+  async function loadInventory() {
+    const tbody = document.getElementById('inv-tbody');
+    tbody.innerHTML = '<tr><td colspan="12">Loading...</td></tr>';
+    try {
+      const res = await apiGet({action:'listItems'});
+      if (!res.ok) throw new Error(res.error || 'error');
+      allItems = res.data || [];
+      renderInventory();
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="12">Error: '+err.message+'</td></tr>';
+      showToast('โหลดสต็อกไม่สำเร็จ', true);
+    }
+  }
+
+  function renderInventory() {
+    const tbody = document.getElementById('inv-tbody');
+    
+    let filteredItems = allItems;
+    if (currentFilter === 'available') {
+      filteredItems = allItems.filter(it => !it.sold_price && it.status === 'พร้อมขาย');
+    } else if (currentFilter === 'sold') {
+      filteredItems = allItems.filter(it => it.sold_price && !it.status?.includes('คืน'));
+    } else if (currentFilter === 'repair') {
+      filteredItems = allItems.filter(it => it.status && it.status.includes('ซ่อม'));
+    } else if (currentFilter === 'returned-customer') {
+      filteredItems = allItems.filter(it => it.status && it.status.includes('คืนลูกค้า'));
+    } else if (currentFilter === 'returned-seller') {
+      filteredItems = allItems.filter(it => it.status && it.status.includes('คืนผู้ขาย'));
+    }
+
+    filteredItems.sort((a, b) => {
+      const dateA = a.received_at || '';
+      const dateB = b.received_at || '';
+      return dateB.localeCompare(dateA);
+    });
+
+    let stockCount = 0, stockValue = 0, profitTotal = 0;
+    tbody.innerHTML = '';
+
+    filteredItems.forEach(it => {
+      const cost = Number(it.total_cost || 0);
+      const sold = Number(it.sold_price || 0);
+      let pf = 0;
+      if (!sold) {
+        stockCount++;
+        stockValue += cost;
+      } else {
+        pf = sold - cost;
+        profitTotal += pf;
+      }
+      
+      const isReturned = it.status && it.status.includes('คืน');
+      
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${it.id}</td>
+        <td><strong>${it.brand || ''} ${it.model || ''}</strong><br><span style="font-size:11px;">${it.category || ''}</span></td>
+        <td>${it.sn || ''}</td>
+        <td>${it.condition || ''}</td>
+        <td><span class="${tagClass(it.status)}">${it.status || ''}</span></td>
+        <td>${money(cost)}</td>
+        <td>${money(it.list_price)}</td>
+        <td>${money(it.sold_price)}</td>
+        <td>${it.received_at || ''}</td>
+        <td>${it.sold_at || ''}</td>
+        <td style="color:${pf>0?'green':(pf<0?'red':'#555')}">${sold?money(pf):'-'}</td>
+        <td>
+          <div class="action-btns">
+            <button class="btn-outline btn-sm" onclick="openEditItemModal('${it.id}')">แก้ไข</button>
+            ${sold && !isReturned ? `<button class="btn-warning btn-sm" onclick="openReturnToCustomerModal('${it.id}')">คืนลูกค้า</button>` : ''}
+            ${!sold && !isReturned ? `<button class="btn-info btn-sm" onclick="openReturnToSellerModal('${it.id}')">คืนผู้ขาย</button>` : ''}
+            <button class="btn-outline btn-sm" onclick="openAdjustCostModal('${it.id}')">แก้ไขต้นทุน</button>
+            <button class="btn-danger btn-sm" onclick="openDeleteItemModal('${it.id}')">ลบ</button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('inv-summary').innerHTML =
+      `แสดง <strong>${filteredItems.length}</strong> รายการ | ของค้างสต็อก <strong>${stockCount}</strong> ชิ้น | มูลค่าต้นทุน <strong>${money(stockValue)}</strong> บาท | กำไรจากของที่ขายแล้ว <strong>${money(profitTotal)}</strong> บาท`;
+  }
+
+  document.querySelectorAll('.filter-tabs button[data-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tabs button[data-filter]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      renderInventory();
+    });
+  });
+
+  async function addInventoryItem() {
+    const payload = {
+      category: document.getElementById('inv-category').value,
+      brand: document.getElementById('inv-brand').value,
+      model: document.getElementById('inv-model').value,
+      sn: document.getElementById('inv-sn').value,
+      condition: document.getElementById('inv-condition').value,
+      status: document.getElementById('inv-status').value,
+      base_cost: document.getElementById('inv-base-cost').value,
+      repair_cost: document.getElementById('inv-repair-cost').value,
+      other_cost: document.getElementById('inv-other-cost').value,
+      list_price: document.getElementById('inv-list-price').value,
+      received_at: document.getElementById('inv-received-at').value
+    };
+    
+    setButtonLoading('btn-inv-add', true);
+    try {
+      const res = await apiPost('createItem', payload);
+      if (!res.ok) throw new Error(res.error || 'error');
+      showToast('✅ บันทึกสินค้าสำเร็จ');
+      await loadInventory();
+      await loadDashboard();
+      
+      document.getElementById('inv-brand').value = '';
+      document.getElementById('inv-model').value = '';
+      document.getElementById('inv-sn').value = '';
+      document.getElementById('inv-condition').value = '';
+      document.getElementById('inv-base-cost').value = '';
+      document.getElementById('inv-repair-cost').value = '0';
+      document.getElementById('inv-other-cost').value = '0';
+      document.getElementById('inv-list-price').value = '';
+      document.getElementById('inv-received-at').value = '';
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    } finally {
+      setButtonLoading('btn-inv-add', false, 'บันทึกสินค้า');
+    }
+  }
+
+  /******** EDIT ITEM MODAL ********/
+  async function openEditItemModal(id) {
+    try {
+      const res = await apiGet({action:'getItem', id});
+      if (!res.ok || !res.data) { 
+        showToast('โหลดข้อมูลไม่สำเร็จ', true); 
+        return; 
+      }
+      currentEditItem = res.data;
+      document.getElementById('edit-item-id').value = currentEditItem.id;
+      document.getElementById('edit-status').value = currentEditItem.status || '';
+      document.getElementById('edit-sold-price').value = currentEditItem.sold_price || '';
+      document.getElementById('edit-sold-at').value = currentEditItem.sold_at || '';
+      openModal('modal-edit-item');
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    }
+  }
+
+  async function saveItemEdit() {
+    const payload = {
+      id: document.getElementById('edit-item-id').value,
+      status: document.getElementById('edit-status').value,
+      sold_price: document.getElementById('edit-sold-price').value,
+      sold_at: document.getElementById('edit-sold-at').value
+    };
+    
+    try {
+      const res = await apiPost('updateItem', payload);
+      if (!res.ok) throw new Error(res.error || 'error');
+      showToast('✅ อัพเดทสำเร็จ');
+      closeModal('modal-edit-item');
+      await loadInventory();
+      await loadDashboard();
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    }
+  }
+
+  /******** RETURN TO CUSTOMER MODAL ********/
+  async function openReturnToCustomerModal(id) {
+    try {
+      const res = await apiGet({action:'getItem', id});
+      if (!res.ok || !res.data) { 
+        showToast('โหลดข้อมูลไม่สำเร็จ', true); 
+        return; 
+      }
+      currentEditItem = res.data;
+      document.getElementById('return-cust-item-name').textContent = `${currentEditItem.brand} ${currentEditItem.model} (${currentEditItem.id})`;
+      document.getElementById('return-cust-item-cost').textContent = money(currentEditItem.total_cost);
+      document.getElementById('return-cust-sold-price').textContent = money(currentEditItem.sold_price);
+      document.getElementById('return-cust-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('return-cust-new-status').value = 'รอเช็ค';
+      document.getElementById('return-cust-reason').value = '';
+      document.getElementById('return-cust-refund-amount').value = currentEditItem.sold_price || '';
+      openModal('modal-return-customer');
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    }
+  }
+
+  async function saveReturnToCustomer() {
+    const reason = document.getElementById('return-cust-reason').value;
+    const newStatus = document.getElementById('return-cust-new-status').value;
+    const refundAmount = document.getElementById('return-cust-refund-amount').value;
+    
+    if (!reason) {
+      showToast('❌ กรุณาระบุเหตุผลที่คืนสินค้า', true);
+      return;
+    }
+
+    const payload = {
+      id: currentEditItem.id,
+      status: newStatus,
+      sold_price: '',
+      sold_at: '',
+      note: `คืนจากลูกค้า: ${reason} (วันที่: ${document.getElementById('return-cust-date').value}, คืนเงิน: ${money(refundAmount)} บาท)`
+    };
+    
+    try {
+      const res = await apiPost('updateItem', payload);
+      if (!res.ok) throw new Error(res.error || 'error');
+      showToast('✅ บันทึกการคืนสินค้าสำเร็จ');
+      closeModal('modal-return-customer');
+      await loadInventory();
+      await loadDashboard();
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    }
+  }
+
+  /******** RETURN TO SELLER MODAL ********/
+  async function openReturnToSellerModal(id) {
+    try {
+      const res = await apiGet({action:'getItem', id});
+      if (!res.ok || !res.data) { 
+        showToast('โหลดข้อมูลไม่สำเร็จ', true); 
+        return; 
+      }
+      currentEditItem = res.data;
+      document.getElementById('return-seller-item-name').textContent = `${currentEditItem.brand} ${currentEditItem.model} (${currentEditItem.id})`;
+      document.getElementById('return-seller-item-cost').textContent = money(currentEditItem.total_cost);
+      document.getElementById('return-seller-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('return-seller-reason').value = '';
+      document.getElementById('return-seller-refund').value = currentEditItem.total_cost || '';
+      document.getElementById('return-seller-action').value = 'remove';
+      openModal('modal-return-seller');
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    }
+  }
+
+  async function saveReturnToSeller() {
+    const reason = document.getElementById('return-seller-reason').value;
+    const refundAmount = document.getElementById('return-seller-refund').value;
+    const action = document.getElementById('return-seller-action').value;
+    
+    if (!reason) {
+      showToast('❌ กรุณาระบุเหตุผลที่คืนสินค้า', true);
+      return;
+    }
+
+    const note = `คืนให้ผู้ขาย: ${reason} (วันที่: ${document.getElementById('return-seller-date').value}, ได้เงินคืน: ${money(refundAmount)} บาท)`;
+
+    try {
+      if (action === 'remove') {
+        // ลบสินค้าออกจากสต็อก
+        const res = await apiPost('deleteItem', {
+          id: currentEditItem.id,
+          reason: note
+        });
+        if (!res.ok) throw new Error(res.error || 'error');
+        showToast('✅ คืนสินค้าให้ผู้ขายและลบออกจากสต็อกแล้ว');
+      } else {
+        // เก็บไว้ในสต็อก แต่เปลี่ยน status
+        const payload = {
+          id: currentEditItem.id,
+          status: 'คืนผู้ขาย',
+          note: note
         };
+        const res = await apiPost('updateItem', payload);
+        if (!res.ok) throw new Error(res.error || 'error');
+        showToast('✅ บันทึกการคืนให้ผู้ขายสำเร็จ');
+      }
+      
+      closeModal('modal-return-seller');
+      await loadInventory();
+      await loadDashboard();
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    }
+  }
 
-        // Track title length
-        document.getElementById('title').addEventListener('input', function() {
-            const length = this.value.length;
-            document.getElementById('titleLength').textContent = `${length}/100`;
-            
-            // Change color based on optimal length
-            const lengthIndicator = document.getElementById('titleLength');
-            if (length >= 60 && length <= 70) {
-                lengthIndicator.style.background = 'linear-gradient(135deg, #00C851, #00C851)';
-            } else if (length >= 50 && length <= 80) {
-                lengthIndicator.style.background = 'linear-gradient(135deg, #FFD700, #FFA000)';
-            } else {
-                lengthIndicator.style.background = 'linear-gradient(135deg, var(--youtube-red), #CC0000)';
-            }
-        });
+  /******** ADJUST COST MODAL ********/
+  async function openAdjustCostModal(id) {
+    try {
+      const res = await apiGet({action:'getItem', id});
+      if (!res.ok || !res.data) { 
+        showToast('โหลดข้อมูลไม่สำเร็จ', true); 
+        return; 
+      }
+      currentEditItem = res.data;
+      document.getElementById('adjust-item-name').textContent = `${currentEditItem.brand} ${currentEditItem.model} (${currentEditItem.id})`;
+      document.getElementById('adjust-item-cost').textContent = money(currentEditItem.total_cost);
+      document.getElementById('adjust-base-cost').value = currentEditItem.base_cost || 0;
+      document.getElementById('adjust-repair-cost').value = currentEditItem.repair_cost || 0;
+      document.getElementById('adjust-other-cost').value = currentEditItem.other_cost || 0;
+      document.getElementById('adjust-reason').value = '';
+      updateCostPreview();
+      openModal('modal-adjust-cost');
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    }
+  }
 
-        // Add emoji to title
-        function addEmoji(emoji) {
-            const titleInput = document.getElementById('title');
-            titleInput.value += emoji;
-            titleInput.dispatchEvent(new Event('input'));
-        }
+  function updateCostPreview() {
+    const base = Number(document.getElementById('adjust-base-cost').value || 0);
+    const repair = Number(document.getElementById('adjust-repair-cost').value || 0);
+    const other = Number(document.getElementById('adjust-other-cost').value || 0);
+    const total = base + repair + other;
+    document.getElementById('new-total-cost').textContent = money(total);
+  }
 
-        // Predict function with real model logic
-        function predictViews(formData) {
-            // Start with base score
-            let logViews = modelCoefficients.base;
-            
-            // Add country effect
-            logViews += modelCoefficients.country[formData.country] || 0;
-            
-            // Add category effect
-            logViews += modelCoefficients.category[formData.category] || 0;
-            
-            // Add feature effects
-            logViews += modelCoefficients.features.publishHour * parseInt(formData.publishHour);
-            logViews += modelCoefficients.features.publishDow * parseInt(formData.publishDow);
-            logViews += modelCoefficients.features.publishMonth * parseInt(formData.publishMonth);
-            logViews += modelCoefficients.features.titleLength * formData.title.length;
-            logViews += modelCoefficients.features.tags * parseInt(formData.tags);
-            logViews += modelCoefficients.features.descLength * parseInt(formData.descLength);
-            logViews += modelCoefficients.features.channelPrevCount * Math.log1p(parseInt(formData.channelVideos));
-            
-            // Channel history effect (MOST IMPORTANT - 90% weight)
-            const channelMedianLogViews = Math.log1p(parseInt(formData.avgViews));
-            logViews += modelCoefficients.features.channelMedianViews * channelMedianLogViews;
-            
-            // Title characteristics
-            const upperCount = (formData.title.match(/[A-Z]/g) || []).length;
-            const upperRatio = upperCount / Math.max(formData.title.length, 1);
-            logViews += modelCoefficients.features.upperRatio * upperRatio;
-            
-            const exclamCount = (formData.title.match(/!/g) || []).length;
-            logViews += modelCoefficients.features.exclamation * exclamCount;
-            
-            const questionCount = (formData.title.match(/\?/g) || []).length;
-            logViews += modelCoefficients.features.question * questionCount;
-            
-            const emojiCount = (formData.title.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length;
-            logViews += modelCoefficients.features.emoji * emojiCount;
-            
-            // Convert back from log scale
-            const predictedViews = Math.expm1(logViews);
-            
-            // Calculate ranges based on model RMSE (0.750)
-            const rmse = 0.750;
-            const minViews = Math.expm1(logViews - rmse);
-            const maxViews = Math.expm1(logViews + rmse);
-            
-            // Calculate confidence based on input quality
-            let confidence = 60;  // Base confidence
-            
-            // Boost confidence for optimal inputs
-            if (formData.channelVideos > 100) confidence += 10;
-            if (formData.avgViews > 50000) confidence += 10;
-            if (formData.tags >= 10 && formData.tags <= 15) confidence += 10;
-            if (formData.title.length >= 60 && formData.title.length <= 70) confidence += 10;
-            if (emojiCount > 0 && emojiCount <= 2) confidence += 5;
-            if (parseInt(formData.publishHour) >= 14 && parseInt(formData.publishHour) <= 17) confidence += 5;
-            
-            confidence = Math.min(95, confidence);
-            
-            return {
-                predicted: predictedViews,
-                min: minViews,
-                max: maxViews,
-                confidence: confidence,
-                logViews: logViews
-            };
-        }
+  document.getElementById('adjust-base-cost').addEventListener('input', updateCostPreview);
+  document.getElementById('adjust-repair-cost').addEventListener('input', updateCostPreview);
+  document.getElementById('adjust-other-cost').addEventListener('input', updateCostPreview);
 
-        // Format large numbers
-        function formatViews(num) {
-            if (num >= 1000000) {
-                return (num / 1000000).toFixed(1) + 'M';
-            } else if (num >= 1000) {
-                return (num / 1000).toFixed(1) + 'K';
-            }
-            return Math.round(num).toLocaleString();
-        }
+  async function saveAdjustCost() {
+    const reason = document.getElementById('adjust-reason').value;
+    
+    if (!reason) {
+      showToast('❌ กรุณาระบุเหตุผลในการแก้ไขต้นทุน', true);
+      return;
+    }
 
-        // Handle form submission
-        document.getElementById('predictionForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            // Get form data
-            const formData = {
-                country: document.getElementById('country').value,
-                category: document.getElementById('category').value,
-                title: document.getElementById('title').value,
-                tags: document.getElementById('tags').value,
-                descLength: document.getElementById('descLength').value,
-                publishHour: document.getElementById('publishHour').value,
-                publishDow: document.getElementById('publishDow').value,
-                publishMonth: document.getElementById('publishMonth').value,
-                channelVideos: document.getElementById('channelVideos').value,
-                avgViews: document.getElementById('avgViews').value
-            };
-            
-            // Show loading
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('results').style.display = 'none';
-            
-            // Simulate processing time for better UX
-            setTimeout(() => {
-                // Get prediction
-                const result = predictViews(formData);
-                
-                // Display results
-                document.getElementById('predictedViews').innerHTML = 
-                    `<i class="bi bi-eye-fill"></i> ${formatViews(result.predicted)} views`;
-                
-                document.getElementById('minViews').textContent = formatViews(result.min);
-                document.getElementById('maxViews').textContent = formatViews(result.max);
-                
-                // Engagement rate (based on category and country)
-                let baseEngagement = 3.5;
-                if (formData.category === 'Music') baseEngagement += 1.5;
-                if (formData.category === 'Gaming') baseEngagement += 1.0;
-                if (formData.country === 'IN' || formData.country === 'KR') baseEngagement += 0.8;
-                const engagementRate = (baseEngagement + Math.random()).toFixed(1) + '%';
-                document.getElementById('engagement').textContent = engagementRate;
-                
-                // Viral chance based on predicted views
-                let viralChance = 'Low';
-                let viralColor = '#dc3545';
-                if (result.predicted > 5000000) {
-                    viralChance = 'Very High';
-                    viralColor = '#00C851';
-                } else if (result.predicted > 1000000) {
-                    viralChance = 'High';
-                    viralColor = '#00C851';
-                } else if (result.predicted > 500000) {
-                    viralChance = 'Medium';
-                    viralColor = '#FFD700';
-                } else if (result.predicted > 100000) {
-                    viralChance = 'Low-Med';
-                    viralColor = '#FFA000';
-                }
-                
-                const viralElement = document.getElementById('viralChance');
-                viralElement.textContent = viralChance;
-                viralElement.style.color = viralColor;
-                
-                // Confidence bar
-                const confidenceBar = document.getElementById('confidenceBar');
-                confidenceBar.style.width = '0%';
-                setTimeout(() => {
-                    confidenceBar.style.width = result.confidence + '%';
-                    confidenceBar.textContent = result.confidence + '% Confidence';
-                }, 100);
-                
-                // Top factors
-                const factors = [];
-                
-                // Analyze what's helping the prediction
-                if (parseInt(formData.avgViews) > 50000) {
-                    factors.push('💪 Strong channel history');
-                }
-                if (formData.category === 'Music' || formData.category === 'Entertainment') {
-                    factors.push('🎵 High-performing category');
-                }
-                if (formData.country === 'GB' || formData.country === 'US') {
-                    factors.push('🌍 Large market region');
-                }
-                if (formData.title.length >= 60 && formData.title.length <= 70) {
-                    factors.push('✅ Optimal title length');
-                }
-                if (parseInt(formData.tags) >= 10 && parseInt(formData.tags) <= 15) {
-                    factors.push('🏷️ Good tag count');
-                }
-                if (parseInt(formData.publishHour) >= 14 && parseInt(formData.publishHour) <= 17) {
-                    factors.push('⏰ Prime publishing time');
-                }
-                if ((formData.title.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length > 0) {
-                    factors.push('😊 Emoji engagement');
-                }
-                
-                // Add at least 3 factors
-                if (factors.length < 3) {
-                    if (!factors.includes('📈 Growth potential')) factors.push('📈 Growth potential');
-                    if (!factors.includes('👥 Target audience')) factors.push('👥 Target audience match');
-                    if (!factors.includes('🎯 Algorithm friendly')) factors.push('🎯 Algorithm friendly');
-                }
-                
-                document.getElementById('topFactors').innerHTML = 
-                    factors.slice(0, 6).map(f => `<span class="feature-badge">${f}</span>`).join('');
-                
-                // Hide loading, show results
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('results').style.display = 'block';
-                
-                // Smooth scroll to results
-                document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }, 1500);
-        });
+    const payload = {
+      id: currentEditItem.id,
+      base_cost: document.getElementById('adjust-base-cost').value,
+      repair_cost: document.getElementById('adjust-repair-cost').value,
+      other_cost: document.getElementById('adjust-other-cost').value,
+      note: `แก้ไขต้นทุน: ${reason}`
+    };
+    
+    try {
+      const res = await apiPost('updateItem', payload);
+      if (!res.ok) throw new Error(res.error || 'error');
+      showToast('✅ แก้ไขต้นทุนสำเร็จ');
+      closeModal('modal-adjust-cost');
+      await loadInventory();
+      await loadDashboard();
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    }
+  }
 
-        // Set default values for better UX
-        document.addEventListener('DOMContentLoaded', function() {
-            // Set current month as default
-            const currentMonth = new Date().getMonth() + 1;
-            document.getElementById('publishMonth').value = currentMonth;
-        });
-    </script>
+  /******** DELETE ITEM MODAL ********/
+  async function openDeleteItemModal(id) {
+    try {
+      const res = await apiGet({action:'getItem', id});
+      if (!res.ok || !res.data) { 
+        showToast('โหลดข้อมูลไม่สำเร็จ', true); 
+        return; 
+      }
+      currentEditItem = res.data;
+      document.getElementById('delete-item-name').textContent = `${currentEditItem.brand} ${currentEditItem.model}`;
+      document.getElementById('delete-item-id').textContent = currentEditItem.id;
+      document.getElementById('delete-reason').value = '';
+      openModal('modal-delete-item');
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    }
+  }
+
+  async function confirmDeleteItem() {
+    const reason = document.getElementById('delete-reason').value;
+    
+    if (!confirm('คุณแน่ใจหรือไม่ที่จะลบสินค้านี้? การกระทำนี้ไม่สามารถยกเลิกได้!')) {
+      return;
+    }
+
+    try {
+      const res = await apiPost('deleteItem', {
+        id: currentEditItem.id,
+        reason: reason
+      });
+      if (!res.ok) throw new Error(res.error || 'error');
+      showToast('✅ ลบสินค้าสำเร็จ');
+      closeModal('modal-delete-item');
+      await loadInventory();
+      await loadDashboard();
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    }
+  }
+
+  /******** AUTOCOMPLETE FOR SALES ********/
+  let selectedItemId = null;
+  const searchInput = document.getElementById('sale-item-search');
+  const autocompleteList = document.getElementById('autocomplete-list');
+
+  searchInput.addEventListener('input', function() {
+    const val = this.value.toLowerCase();
+    autocompleteList.innerHTML = '';
+    
+    if (!val) {
+      selectedItemId = null;
+      hideItemPreview();
+      return;
+    }
+
+    const matches = allItems.filter(it => {
+      if (it.sold_price) return false;
+      const searchStr = `${it.id} ${it.brand} ${it.model} ${it.category}`.toLowerCase();
+      return searchStr.includes(val);
+    }).slice(0, 10);
+
+    matches.forEach(it => {
+      const div = document.createElement('div');
+      div.innerHTML = `<strong>${it.id}</strong> - ${it.brand} ${it.model} <span style="color:#6b7280;">(${money(it.list_price)} บาท)</span>`;
+      div.addEventListener('click', function() {
+        selectedItemId = it.id;
+        searchInput.value = `${it.id} - ${it.brand} ${it.model}`;
+        document.getElementById('sale-price').value = it.list_price || '';
+        autocompleteList.innerHTML = '';
+        showItemPreview(it);
+      });
+      autocompleteList.appendChild(div);
+    });
+  });
+
+  function showItemPreview(item) {
+    const preview = document.getElementById('selected-item-preview');
+    const text = document.getElementById('preview-text');
+    text.textContent = `${item.brand} ${item.model} (${item.id}) - ราคาตั้งขาย ${money(item.list_price)} บาท`;
+    preview.style.display = 'block';
+  }
+
+  function hideItemPreview() {
+    document.getElementById('selected-item-preview').style.display = 'none';
+  }
+
+  document.addEventListener('click', function(e) {
+    if (e.target !== searchInput) {
+      autocompleteList.innerHTML = '';
+    }
+  });
+
+  /******** SALES ********/
+  async function loadSales() {
+    const tbody = document.getElementById('sales-tbody');
+    tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
+    try {
+      const res = await apiGet({action:'listSales'});
+      if (!res.ok) throw new Error(res.error || 'error');
+      const sales = (res.data || []).slice().reverse().slice(0,50);
+      tbody.innerHTML = '';
+      sales.forEach(s => {
+        let total = 0;
+        const items = s.items || [];
+        items.forEach(i => total += Number(i.selling_price || 0) - Number(i.discount || 0));
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${s.sale_date || ''}</td>
+          <td>${s.id}</td>
+          <td>${s.customer_name || ''}</td>
+          <td>${s.channel || ''}</td>
+          <td>${items.length}</td>
+          <td>${money(total)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="6">Error: '+err.message+'</td></tr>';
+      showToast('โหลดประวัติการขายไม่สำเร็จ', true);
+    }
+  }
+
+  async function submitSale() {
+    if (!selectedItemId) {
+      showToast('❌ กรุณาเลือกสินค้าก่อน', true);
+      return;
+    }
+
+    const sellingPrice = document.getElementById('sale-price').value;
+    if (!sellingPrice || Number(sellingPrice) <= 0) {
+      showToast('❌ กรุณากรอกราคาขาย', true);
+      return;
+    }
+
+    const payload = {
+      sale_date: document.getElementById('sale-date').value,
+      customer_name: document.getElementById('sale-customer').value,
+      customer_contact: '',
+      channel: document.getElementById('sale-channel').value,
+      payment_method: document.getElementById('sale-payment').value,
+      shipping_tracking: document.getElementById('sale-tracking').value,
+      shipping_cost: document.getElementById('sale-ship').value,
+      platform_fee: document.getElementById('sale-fee').value,
+      items: [{
+        item_id: selectedItemId,
+        selling_price: sellingPrice,
+        discount: document.getElementById('sale-discount').value
+      }]
+    };
+
+    setButtonLoading('btn-sale-submit', true);
+    try {
+      const res = await apiPost('createSale', payload);
+      if (!res.ok) throw new Error(res.error || 'error');
+      showToast('✅ บันทึกการขายสำเร็จ');
+      await loadSales();
+      await loadInventory();
+      await loadDashboard();
+      
+      searchInput.value = '';
+      selectedItemId = null;
+      hideItemPreview();
+      document.getElementById('sale-price').value = '';
+      document.getElementById('sale-discount').value = '0';
+      document.getElementById('sale-customer').value = '';
+      document.getElementById('sale-tracking').value = '';
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    } finally {
+      setButtonLoading('btn-sale-submit', false, 'บันทึกการขาย');
+    }
+  }
+
+  /******** PURCHASES ********/
+  async function loadPurchases() {
+    const tbody = document.getElementById('pur-tbody');
+    tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
+    try {
+      const res = await apiGet({action:'listPurchases'});
+      if (!res.ok) throw new Error(res.error || 'error');
+      const data = (res.data || []).slice().reverse().slice(0,50);
+      tbody.innerHTML = '';
+      data.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${p.purchase_date || ''}</td>
+          <td>${p.id}</td>
+          <td>${p.seller_name || ''}</td>
+          <td>${p.source_channel || ''}</td>
+          <td>${money(p.total_amount)}</td>
+          <td>${p.tracking_in || ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="6">Error: '+err.message+'</td></tr>';
+      showToast('โหลดประวัติการซื้อไม่สำเร็จ', true);
+    }
+  }
+
+  async function submitPurchase() {
+    const payload = {
+      purchase_date: document.getElementById('pur-date').value,
+      seller_name: document.getElementById('pur-seller').value,
+      seller_contact: '',
+      source_channel: document.getElementById('pur-channel').value,
+      payment_method: document.getElementById('pur-payment').value,
+      paid_from_account: document.getElementById('pur-account').value || 'MAIN',
+      total_amount: document.getElementById('pur-amount').value,
+      tracking_in: document.getElementById('pur-track').value,
+      note: document.getElementById('pur-note').value
+    };
+    
+    setButtonLoading('btn-pur-submit', true);
+    try {
+      const res = await apiPost('createPurchase', payload);
+      if (!res.ok) throw new Error(res.error || 'error');
+      showToast('✅ บันทึกการซื้อสำเร็จ');
+      await loadPurchases();
+      await loadDashboard();
+      
+      document.getElementById('pur-seller').value = '';
+      document.getElementById('pur-amount').value = '';
+      document.getElementById('pur-track').value = '';
+      document.getElementById('pur-note').value = '';
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    } finally {
+      setButtonLoading('btn-pur-submit', false, 'บันทึกการซื้อ');
+    }
+  }
+
+  /******** PARTS & REPAIRS ********/
+  async function loadParts() {
+    const tbody = document.getElementById('parts-tbody');
+    tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+    try {
+      const res = await apiGet({action:'listParts'});
+      if (!res.ok) throw new Error(res.error || 'error');
+      const parts = res.data || [];
+      tbody.innerHTML = '';
+      parts.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${p.id}</td>
+          <td>${p.part_name || ''}</td>
+          <td>${p.compatible_models || ''}</td>
+          <td>${p.stock_qty || 0}</td>
+          <td>${money(p.unit_cost)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="5">Error: '+err.message+'</td></tr>';
+      showToast('โหลดอะไหล่ไม่สำเร็จ', true);
+    }
+  }
+
+  async function submitPart() {
+    const payload = {
+      part_name: document.getElementById('part-name').value,
+      compatible_models: document.getElementById('part-models').value,
+      stock_qty: document.getElementById('part-qty').value,
+      unit_cost: document.getElementById('part-cost').value
+    };
+    
+    setButtonLoading('btn-part-submit', true);
+    try {
+      const res = await apiPost('createPart', payload);
+      if (!res.ok) throw new Error(res.error || 'error');
+      showToast('✅ เพิ่มอะไหล่สำเร็จ');
+      await loadParts();
+      
+      document.getElementById('part-name').value = '';
+      document.getElementById('part-models').value = '';
+      document.getElementById('part-qty').value = '';
+      document.getElementById('part-cost').value = '';
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    } finally {
+      setButtonLoading('btn-part-submit', false, 'เพิ่มอะไหล่ใหม่');
+    }
+  }
+
+  async function submitRepair() {
+    const payload = {
+      item_id: document.getElementById('rep-item-id').value,
+      problem_description: document.getElementById('rep-problem').value,
+      repair_actions: document.getElementById('rep-actions').value,
+      labor_cost: document.getElementById('rep-labor').value,
+      repair_shop: document.getElementById('rep-shop').value,
+      send_date: document.getElementById('rep-send').value,
+      done_date: document.getElementById('rep-done').value,
+      parts: []
+    };
+    const partId = document.getElementById('rep-part-id').value;
+    const qty = Number(document.getElementById('rep-part-qty').value || 0);
+    if (partId && qty > 0) {
+      payload.parts.push({ part_id: partId, qty });
+    }
+    
+    setButtonLoading('btn-rep-submit', true);
+    try {
+      const res = await apiPost('createRepair', payload);
+      if (!res.ok) throw new Error(res.error || 'error');
+      showToast('✅ บันทึกงานซ่อมสำเร็จ');
+      await loadInventory();
+      await loadParts();
+      await loadDashboard();
+      
+      document.getElementById('rep-item-id').value = '';
+      document.getElementById('rep-problem').value = '';
+      document.getElementById('rep-actions').value = '';
+      document.getElementById('rep-labor').value = '0';
+      document.getElementById('rep-part-id').value = '';
+      document.getElementById('rep-part-qty').value = '0';
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    } finally {
+      setButtonLoading('btn-rep-submit', false, 'บันทึกการซ่อม');
+    }
+  }
+
+  /******** LOANS ********/
+  async function loadLoans() {
+    const tbody = document.getElementById('loans-tbody');
+    tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
+    try {
+      const res = await apiGet({action:'listLoans'});
+      if (!res.ok) throw new Error(res.error || 'error');
+      const loans = res.data || [];
+      tbody.innerHTML = '';
+      loans.forEach(l => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${l.id}</td>
+          <td>${l.lender_name || ''}</td>
+          <td>${l.start_date || ''}</td>
+          <td>${money(l.principal_amount)}</td>
+          <td>${money(l.remaining_balance)}</td>
+          <td>${l.interest_rate || 0}%</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="6">Error: '+err.message+'</td></tr>';
+      showToast('โหลดเงินกู้ไม่สำเร็จ', true);
+    }
+  }
+
+  async function submitLoan() {
+    const payload = {
+      lender_name: document.getElementById('loan-lender').value,
+      start_date: document.getElementById('loan-date').value,
+      principal_amount: document.getElementById('loan-amount').value,
+      interest_rate: document.getElementById('loan-rate').value,
+      installment_amount: document.getElementById('loan-install').value,
+      note: document.getElementById('loan-note').value
+    };
+    
+    setButtonLoading('btn-loan-submit', true);
+    try {
+      const res = await apiPost('createLoan', payload);
+      if (!res.ok) throw new Error(res.error || 'error');
+      showToast('✅ บันทึกเงินกู้สำเร็จ');
+      await loadLoans();
+      await loadDashboard();
+      
+      document.getElementById('loan-lender').value = '';
+      document.getElementById('loan-amount').value = '';
+      document.getElementById('loan-rate').value = '';
+      document.getElementById('loan-install').value = '';
+      document.getElementById('loan-note').value = '';
+    } catch (err) {
+      showToast('❌ ' + err.message, true);
+    } finally {
+      setButtonLoading('btn-loan-submit', false, 'บันทึกเงินกู้');
+    }
+  }
+
+  // EVENT BIND
+  document.getElementById('btn-inv-add').addEventListener('click', addInventoryItem);
+  document.getElementById('btn-inv-reload').addEventListener('click', loadInventory);
+  document.getElementById('btn-sale-submit').addEventListener('click', submitSale);
+  document.getElementById('btn-pur-submit').addEventListener('click', submitPurchase);
+  document.getElementById('btn-part-submit').addEventListener('click', submitPart);
+  document.getElementById('btn-rep-submit').addEventListener('click', submitRepair);
+  document.getElementById('btn-loan-submit').addEventListener('click', submitLoan);
+
+  // Auto-fill today's date
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('sale-date').value = today;
+  document.getElementById('pur-date').value = today;
+  document.getElementById('inv-received-at').value = today;
+  document.getElementById('loan-date').value = today;
+
+  // INITIAL LOAD
+  (async function init() {
+    await loadDashboard();
+    await loadInventory();
+    await loadSales();
+    await loadPurchases();
+    await loadParts();
+    await loadLoans();
+  })();
+</script>
 </body>
 </html>
