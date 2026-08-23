@@ -489,22 +489,52 @@ function bahtText(number){
   return out;
 }
 
-// ---------- Storage (localStorage) ----------
+// ---------- Storage (Google Apps Script + Sheets/Drive backend) ----------
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbyOmAnnM4oRLkm7Ck_kbPuCzZJKJCux0q1MTLMB2YXWEYrStG9RJdYOLgRpHmQqPfyn/exec';
 const STORAGE_PREFIX = 'frameledger_';
 let storageWarned = false;
+
+async function apiSave(key, data){
+  const res = await fetch(API_BASE_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify({ action:'save', key, data })
+  });
+  const json = await res.json();
+  if(!json || !json.ok) throw new Error((json && json.error) || 'save failed');
+  return json;
+}
+
 async function loadAll(){
-  try{ const v = localStorage.getItem(STORAGE_PREFIX+'transactions'); transactions = v?JSON.parse(v):[]; }catch(e){ transactions=[]; }
-  try{ const v = localStorage.getItem(STORAGE_PREFIX+'inventory'); inventory = v?JSON.parse(v):[]; }catch(e){ inventory=[]; }
-  try{ const v = localStorage.getItem(STORAGE_PREFIX+'invoices'); invoices = v?JSON.parse(v):[]; }catch(e){ invoices=[]; }
-  try{ const v = localStorage.getItem(STORAGE_PREFIX+'receipts'); receipts = v?JSON.parse(v):[]; }catch(e){ receipts=[]; }
   try{
-    const v = localStorage.getItem(STORAGE_PREFIX+'settings');
-    if(v) settings = JSON.parse(v);
-    if(!settings.profile) settings.profile={shopName:'',ownerName:'',address:'',phone:'',taxId:''};
-    if(!settings.costMode) settings.costMode='detailed';
-    if(!settings.claudeModel) settings.claudeModel='claude-sonnet-5';
-    if(settings.claudeApiKey==null) settings.claudeApiKey='';
+    const res = await fetch(API_BASE_URL + '?action=loadAll');
+    const data = await res.json();
+    if(!data || !data.ok) throw new Error((data && data.error) || 'load failed');
+    transactions = data.transactions || [];
+    inventory = data.inventory || [];
+    invoices = data.invoices || [];
+    receipts = data.receipts || [];
+    const remote = data.settings || {};
+    settings.taxRate = remote.taxRate != null ? remote.taxRate : settings.taxRate;
+    settings.costMode = remote.costMode || settings.costMode;
+    settings.profile = remote.profile || settings.profile;
+  }catch(e){
+    console.error('loadAll failed', e);
+    showToast('⚠ โหลดข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วลองรีเฟรชหน้าใหม่', 5000);
+  }
+  // Claude API key/model stay local-only (never synced to the shared Sheet)
+  try{
+    const localRaw = localStorage.getItem(STORAGE_PREFIX+'local');
+    if(localRaw){
+      const local = JSON.parse(localRaw);
+      settings.claudeApiKey = local.claudeApiKey || '';
+      settings.claudeModel = local.claudeModel || 'claude-sonnet-5';
+    }
   }catch(e){}
+  if(!settings.profile) settings.profile={shopName:'',ownerName:'',address:'',phone:'',taxId:''};
+  if(!settings.costMode) settings.costMode='detailed';
+  if(!settings.claudeModel) settings.claudeModel='claude-sonnet-5';
+  if(settings.claudeApiKey==null) settings.claudeApiKey='';
   document.getElementById('taxRateInput').value = settings.taxRate;
   setCostMode(settings.costMode, true);
   updateShopSub();
@@ -512,11 +542,16 @@ async function loadAll(){
 }
 async function persist(key,val){
   try{
-    localStorage.setItem(STORAGE_PREFIX+key, JSON.stringify(val));
+    if(key === 'settings'){
+      await apiSave('settings', { taxRate: val.taxRate, costMode: val.costMode, profile: val.profile });
+      localStorage.setItem(STORAGE_PREFIX+'local', JSON.stringify({ claudeApiKey: val.claudeApiKey||'', claudeModel: val.claudeModel||'claude-sonnet-5' }));
+      return true;
+    }
+    await apiSave(key, val);
     return true;
   }catch(e){
     console.error('storage failed for '+key, e);
-    if(!storageWarned){ storageWarned=true; showToast('⚠ บันทึกอัตโนมัติมีปัญหาชั่วคราว ข้อมูลยังใช้งานได้ในเซสชันนี้ — ลองกด ⬇ JSON เพื่อสำรองไว้'); }
+    if(!storageWarned){ storageWarned=true; showToast('⚠ บันทึกขึ้นเซิร์ฟเวอร์ไม่สำเร็จ — เช็คอินเทอร์เน็ต ข้อมูลยังใช้งานได้ในเซสชันนี้ — ลองกด ⬇ JSON เพื่อสำรองไว้', 5000); }
     return false;
   }
 }
@@ -525,6 +560,38 @@ const saveInventory=()=>persist('inventory',inventory);
 const saveInvoices=()=>persist('invoices',invoices);
 const saveReceipts=()=>persist('receipts',receipts);
 const saveSettings=()=>persist('settings',settings);
+
+// ---------- Image upload (Drive, via Apps Script) ----------
+let pendingUploads = {};
+async function uploadImageToDrive(dataUrl, prefix){
+  try{
+    const [header, base64] = dataUrl.split(',');
+    const mimeMatch = header.match(/data:(.*?);base64/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const filename = (prefix||'img') + '-' + Date.now() + '.jpg';
+    const res = await fetch(API_BASE_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'uploadImage', base64, mimeType, filename })
+    });
+    const data = await res.json();
+    if(data && data.ok) return data.url;
+    throw new Error((data && data.error) || 'upload failed');
+  }catch(e){
+    console.error('uploadImageToDrive failed', e);
+    showToast('⚠ อัปโหลดรูปขึ้น Drive ไม่สำเร็จ — บันทึกข้อมูลต่อโดยไม่มีรูป', 4000);
+    return null;
+  }
+}
+function startImageUpload(name, dataUrl, prefix){
+  pendingUploads[name] = uploadImageToDrive(dataUrl, prefix);
+}
+async function resolveImageUpload(name){
+  const p = pendingUploads[name];
+  pendingUploads[name] = null;
+  if(!p) return null;
+  return await p;
+}
 
 function updateShopSub(){
   const p = settings.profile;
@@ -590,7 +657,7 @@ function closeAddModal(){
   document.getElementById('txModalBackdrop').classList.remove('open');
   document.getElementById('receiptThumb').style.display='none';
   document.getElementById('scanStatus').style.display='none';
-  pendingImageBase64 = null; pendingImageDataUrl = null;
+  pendingImageBase64 = null; pendingImageDataUrl = null; pendingUploads.receipt = null;
   ['fVendor','fAmount','fNote'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('fLinkItem').value='';
 }
@@ -641,6 +708,7 @@ function handleFileUpload(e){
     pendingImageBase64 = dataUrl.split(',')[1];
     document.getElementById('receiptThumb').src = dataUrl;
     document.getElementById('receiptThumb').style.display='block';
+    startImageUpload('receipt', dataUrl, 'receipt');
     await scanReceipt(pendingImageBase64, 'image/jpeg');
   }).catch(()=>showToast('ประมวลผลรูปไม่สำเร็จ ลองใหม่อีกครั้ง'));
 }
@@ -713,6 +781,7 @@ async function saveTransaction(){
     let qty = parseInt(document.getElementById('stkQty').value)||1; if(qty<1) qty=1;
     const perUnitCost = amount / qty;
     const rows = document.querySelectorAll('#snRowsWrap .snrow');
+    const evidencePhotoUrl = await resolveImageUpload('receipt');
     for(let i=0;i<qty;i++){
       const row = rows[i];
       const sn = row ? row.querySelector('[data-role="sn"]').value.trim() : '';
@@ -724,7 +793,7 @@ async function saveTransaction(){
         supplier: tx.vendor,
         purchaseCost: Math.round(perUnitCost*100)/100,
         dateIn: tx.date, status:'stock', salePrice:null, saleDate:null, customer:null, saleSlip:null,
-        evidencePhoto: pendingImageDataUrl || null
+        evidencePhoto: evidencePhotoUrl || null
       });
     }
     await saveInventory();
@@ -740,7 +809,7 @@ async function saveTransaction(){
 function openInvModal(){
   document.getElementById('iDate').value = todayStr();
   document.getElementById('iCode').value = 'CAM-' + String(inventory.length+1).padStart(4,'0');
-  invEvidenceDataUrl = null;
+  invEvidenceDataUrl = null; pendingUploads.invEvidence = null;
   document.getElementById('iEvidenceThumb').style.display='none';
   document.getElementById('invModalBackdrop').classList.add('open');
 }
@@ -754,12 +823,14 @@ function handleInvEvidence(e){
     invEvidenceDataUrl = dataUrl;
     document.getElementById('iEvidenceThumb').src = dataUrl;
     document.getElementById('iEvidenceThumb').style.display='block';
+    startImageUpload('invEvidence', dataUrl, 'evidence');
   });
 }
 async function saveInventoryItem(){
   const name = document.getElementById('iName').value.trim();
   const cost = parseFloat(document.getElementById('iCost').value) || 0;
   if(!name){ alert('กรุณากรอกชื่อรุ่น'); return; }
+  const evidencePhotoUrl = await resolveImageUpload('invEvidence');
   const item = {
     id: uid(), name,
     sn: document.getElementById('iSN').value.trim(),
@@ -769,7 +840,7 @@ async function saveInventoryItem(){
     purchaseCost: cost,
     dateIn: document.getElementById('iDate').value || todayStr(),
     status: 'stock', salePrice:null, saleDate:null, customer:null, saleSlip:null,
-    evidencePhoto: invEvidenceDataUrl || null
+    evidencePhoto: evidencePhotoUrl || null
   };
   inventory.unshift(item);
   await saveInventory();
@@ -790,10 +861,11 @@ function handleSoldSlip(e){
     soldSlipDataUrl = dataUrl;
     document.getElementById('sSlipThumb').src = dataUrl;
     document.getElementById('sSlipThumb').style.display='block';
+    startImageUpload('soldSlip', dataUrl, 'sale-slip');
   });
 }
 function openSoldModal(itemId){
-  soldTargetId=itemId; soldSlipDataUrl=null;
+  soldTargetId=itemId; soldSlipDataUrl=null; pendingUploads.soldSlip = null;
   document.getElementById('sDate').value = todayStr();
   document.getElementById('sSlipThumb').style.display='none';
   document.getElementById('sPrice').value=''; document.getElementById('sCustomer').value='';
@@ -807,7 +879,7 @@ async function confirmSold(){
   item.status='sold'; item.salePrice=price;
   item.customer = document.getElementById('sCustomer').value || '-';
   item.saleDate = document.getElementById('sDate').value || todayStr();
-  item.saleSlip = soldSlipDataUrl;
+  item.saleSlip = await resolveImageUpload('soldSlip');
   transactions.unshift({ id:uid(), type:'income', vendor:item.customer, amount:price, date:item.saleDate, category:'ขายกล้อง/เลนส์', note:`ขาย ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id });
   await saveInventory(); await saveTransactions();
   closeSoldModal(); renderAll();
@@ -832,7 +904,7 @@ function viewSlip(url){ document.getElementById('slipViewImg').src=url; document
 function closeSlipView(e){ if(e.target.id==='slipViewBackdrop') document.getElementById('slipViewBackdrop').classList.remove('open'); }
 
 function openEvidModal(itemId){
-  evidTargetId = itemId; existingEvidenceDataUrl = null;
+  evidTargetId = itemId; existingEvidenceDataUrl = null; pendingUploads.existingEvidence = null;
   document.getElementById('evidThumb').style.display='none';
   document.getElementById('evidModalBackdrop').classList.add('open');
 }
@@ -843,12 +915,15 @@ function handleExistingEvidence(e){
     existingEvidenceDataUrl = dataUrl;
     document.getElementById('evidThumb').src = dataUrl;
     document.getElementById('evidThumb').style.display='block';
+    startImageUpload('existingEvidence', dataUrl, 'evidence');
   });
 }
 async function saveExistingEvidence(){
   if(!existingEvidenceDataUrl){ alert('เลือกรูปก่อน'); return; }
   const item = inventory.find(i=>i.id===evidTargetId); if(!item) return;
-  item.evidencePhoto = existingEvidenceDataUrl;
+  const url = await resolveImageUpload('existingEvidence');
+  if(!url){ return; } // upload failed; toast already shown, keep old photo untouched
+  item.evidencePhoto = url;
   await saveInventory();
   closeEvidModal(); renderAll();
 }
@@ -867,6 +942,7 @@ function handleInvSlip(e){
     invSlipDataUrl = dataUrl;
     document.getElementById('invSlipThumb').src = dataUrl;
     document.getElementById('invSlipThumb').style.display='block';
+    startImageUpload('invSlip', dataUrl, 'sale-slip');
   });
 }
 async function generateInvoice(){
@@ -879,7 +955,8 @@ async function generateInvoice(){
   if(!price || price<=0){ alert('กรอกราคาขาย'); return; }
 
   const {total:cost} = itemCostBreakdown(item.id);
-  item.status='sold'; item.salePrice=price; item.customer=customer; item.saleDate=date; item.saleSlip=invSlipDataUrl;
+  const saleSlipUrl = await resolveImageUpload('invSlip');
+  item.status='sold'; item.salePrice=price; item.customer=customer; item.saleDate=date; item.saleSlip=saleSlipUrl;
   transactions.unshift({ id:uid(), type:'income', vendor:customer, amount:price, date, category:'ขายกล้อง/เลนส์', note:`ขาย ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id });
   const invNo = 'INV-' + (invoices.length+1).toString().padStart(4,'0');
   const inv = { id:uid(), invNo, itemName:item.name, sn:item.sn, productCode:item.productCode, customer, price, date, cost, profit: price-cost };
