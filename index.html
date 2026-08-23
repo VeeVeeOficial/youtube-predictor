@@ -1,1040 +1,1098 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="UTF-8" />
-<title>FrameLedger</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FrameLedger — บัญชีร้านกล้อง</title>
 <style>
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #f1f5f9;
-    color: #0f172a;
+  :root{
+    --bg:#12130f; --panel:#1b1c16; --panel2:#22241c; --line:#33352a;
+    --paper:#f4f0e4; --ink:#eae6d8; --dim:#a7a693;
+    --gold:#d8a441; --gold-dim:#8a6f34; --rust:#c96a44; --moss:#7c9473;
+    --mono:'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace;
+    --serif:'Fraunces',Georgia,serif; --sans:'Inter',-apple-system,'Segoe UI',sans-serif;
   }
-  header {
-    background: #020617;
-    color: white;
-    padding: 12px 16px;
-    position: sticky;
-    top: 0;
-    z-index: 20;
-  }
-  .header-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  header h1 { font-size: 18px; margin: 0; }
-  header .subtitle { font-size: 11px; color: #94a3b8; margin-top: 2px; }
-  .gear-btn {
-    background: transparent;
-    border: 1px solid rgba(148,163,184,0.6);
-    color: #e5e7eb;
-    border-radius: 999px;
-    width: 32px; height: 32px;
-    font-size: 16px;
-    cursor: pointer;
-  }
-  .nav {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-top: 10px;
-  }
-  .nav button {
-    background: transparent;
-    border-radius: 999px;
-    border: 1px solid rgba(148,163,184,0.8);
-    color: #e5e7eb;
-    padding: 5px 12px;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .nav button.active {
-    background: #22c55e;
-    border-color: #22c55e;
-    color: #022c22;
-  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);}
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  #app{max-width:480px;margin:0 auto;min-height:100vh;background:var(--bg);display:flex;flex-direction:column;position:relative;}
 
-  .page { max-width: 900px; margin: 16px auto; padding: 0 12px 90px; }
-  .card {
-    background: white;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 16px;
-    box-shadow: 0 10px 30px rgba(15,23,42,0.08);
-  }
-  h2 { margin-top: 0; font-size: 16px; }
-  label { display: block; font-size: 13px; margin-top: 8px; }
-  input, select, textarea {
-    width: 100%;
-    padding: 7px 9px;
-    margin-top: 3px;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
-    font-size: 13px;
-    font-family: inherit;
-  }
-  textarea { resize: vertical; min-height: 50px; }
+  .topbar{padding:18px 16px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:20;display:flex;justify-content:space-between;align-items:flex-start;}
+  .brand{display:flex;align-items:baseline;gap:8px;}
+  .brand .mark{width:22px;height:22px;border:1.5px solid var(--gold);border-radius:50%;position:relative;flex-shrink:0;}
+  .brand .mark::after{content:'';position:absolute;inset:5px;border-radius:50%;background:var(--gold);}
+  .brand h1{font-family:var(--serif);font-size:19px;font-weight:600;margin:0;letter-spacing:.2px;}
+  .sub{font-size:12px;color:var(--dim);margin-top:4px;}
+  .gearbtn{background:var(--panel2);border:1px solid var(--line);color:var(--dim);border-radius:8px;width:34px;height:34px;font-size:15px;cursor:pointer;}
 
-  .row { display: flex; flex-wrap: wrap; gap: 8px; }
-  .col-3 { flex: 0 0 calc(25% - 8px); }
-  .col-4 { flex: 0 0 calc(33.333% - 8px); }
-  .col-6 { flex: 0 0 calc(50% - 8px); }
-  .col-12 { flex: 0 0 100%; }
+  .tabs{display:flex;gap:2px;padding:10px 16px 0;border-bottom:1px solid var(--line);position:sticky;top:64px;background:var(--bg);z-index:19;overflow-x:auto;}
+  .tab{font-family:var(--mono);font-size:11.5px;letter-spacing:.3px;padding:9px 12px;color:var(--dim);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;}
+  .tab.active{color:var(--gold);border-bottom-color:var(--gold);}
 
-  button {
-    padding: 8px 14px;
-    border-radius: 999px;
-    border: none;
-    font-size: 13px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-primary { background: #22c55e; color: #022c22; }
-  .btn-outline { background: white; color: #0f172a; border: 1px solid #cbd5e1; }
-  .btn-danger { background: #ef4444; color: white; }
-  .btn-info { background: #3b82f6; color: white; }
-  .btn-sm { padding: 4px 10px; font-size: 11px; }
-  .btn-block { width: 100%; justify-content: center; }
+  .view{padding:16px;padding-bottom:100px;display:none;}
+  .view.active{display:block;}
 
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; }
-  th { background: #f8fafc; position: sticky; top: 0; }
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px;}
+  .card h3{font-family:var(--serif);font-size:15px;margin:0 0 10px;font-weight:600;}
 
-  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: #e5e7eb; }
-  .tag.ready { background:#dcfce7; color:#166534; }
-  .tag.sold { background:#e0f2fe; color:#075985; }
-  .tag.income { background:#dcfce7; color:#166534; }
-  .tag.expense { background:#fee2e2; color:#991b1b; }
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;}
+  .stat .lbl{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;}
+  .stat .val{font-family:var(--mono);font-size:20px;font-weight:600;}
+  .stat.income .val{color:var(--moss);} .stat.expense .val{color:var(--rust);} .stat.profit .val{color:var(--gold);}
 
-  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; }
-  .stat-card { background: #020617; color:#e5e7eb; border-radius: 12px; padding: 12px 14px; }
-  .stat-label { font-size:11px; color:#9ca3af; }
-  .stat-value { font-size:20px; margin-top:4px; font-weight:600; }
-  .stat-value.pos { color:#4ade80; }
-  .stat-value.neg { color:#f87171; }
+  .taxrow{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line);margin-top:4px;}
+  .taxrow label{font-size:12px;color:var(--dim);}
+  .taxrow input{width:60px;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:5px 6px;font-family:var(--mono);font-size:12px;text-align:right;}
 
-  .toast {
-    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
-    background: #0f172a; color: white; padding: 10px 18px; border-radius: 999px;
-    display: none; z-index: 1000; font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  }
-  .toast.show { display: block; }
-  .toast.error { background: #b91c1c; }
+  .btn{font-family:var(--sans);font-size:13px;font-weight:600;padding:11px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);cursor:pointer;width:100%;}
+  .btn.primary{background:var(--gold);color:#1a1200;border-color:var(--gold);}
+  .btn.ghost{background:transparent;}
+  .btn.small{width:auto;padding:7px 11px;font-size:12px;}
+  .btn.danger{color:var(--rust);}
+  .row-btns{display:flex;gap:8px;}
+  .row-btns .btn{flex:1;}
 
-  .modal {
-    display: none; position: fixed; z-index: 1000; left: 0; top: 0;
-    width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);
-  }
-  .modal.show { display: flex; align-items: center; justify-content: center; }
-  .modal-content {
-    background-color: white; padding: 18px; border-radius: 14px;
-    max-width: 480px; width: 92%; max-height: 90vh; overflow-y: auto;
-  }
-  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  .modal-header h3 { margin: 0; font-size: 16px; }
-  .close-modal { background: none; border: none; font-size: 22px; cursor: pointer; color: #6b7280; padding: 0; }
-  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .field{margin-bottom:10px;}
+  .field label{display:block;font-size:11.5px;color:var(--dim);margin-bottom:4px;}
+  .field input,.field select,.field textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:9px 10px;font-family:var(--sans);font-size:13.5px;}
+  .field textarea{resize:vertical;min-height:50px;}
+  .field-row{display:flex;gap:8px;}
+  .field-row .field{flex:1;}
+  .hint{font-size:10.5px;color:var(--dim);margin-top:3px;}
+  .checkrow{display:flex;align-items:center;gap:8px;padding:10px;background:var(--panel2);border-radius:8px;margin:10px 0;cursor:pointer;}
+  .checkrow input{width:16px;height:16px;}
+  .checkrow span{font-size:12.5px;color:var(--ink);}
 
-  .filter-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
-  .filter-tabs button { padding: 5px 12px; background: #f1f5f9; color: #334155; border: none; border-radius: 999px; font-size: 12px; }
-  .filter-tabs button.active { background: #3b82f6; color: white; }
+  .segmented{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .segmented button{flex:1;padding:9px;background:var(--panel2);color:var(--dim);border:none;font-size:12.5px;font-weight:600;cursor:pointer;}
+  .segmented button.on.income{background:rgba(124,148,115,.2);color:var(--moss);}
+  .segmented button.on.expense{background:rgba(201,106,68,.2);color:var(--rust);}
+  .segmented2{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:12px;}
+  .segmented2 button{flex:1;padding:8px;background:var(--panel2);color:var(--dim);border:none;font-size:11.5px;font-weight:600;cursor:pointer;}
+  .segmented2 button.on{background:rgba(216,164,65,.18);color:var(--gold);}
 
-  .recent-item { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f1f5f9; font-size:13px; }
-  .recent-item:last-child { border-bottom: none; }
-  .recent-amt.income { color:#16a34a; font-weight:600; }
-  .recent-amt.expense { color:#dc2626; font-weight:600; }
+  .tx{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);gap:10px;}
+  .tx:last-child{border-bottom:none;}
+  .tx .l{flex:1;min-width:0;}
+  .tx .name{font-size:13.5px;font-weight:600;}
+  .tx .meta{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:2px;}
+  .tx .amt{font-family:var(--mono);font-size:14px;font-weight:600;white-space:nowrap;}
+  .tx .amt.income{color:var(--moss);} .tx .amt.expense{color:var(--rust);}
+  .badge{display:inline-block;font-family:var(--mono);font-size:9.5px;padding:2px 6px;border-radius:4px;background:var(--panel2);color:var(--gold-dim);border:1px solid var(--line);margin-top:3px;margin-right:4px;}
 
-  .fab {
-    position: fixed; right: 20px; bottom: 20px; width: 54px; height: 54px;
-    border-radius: 50%; background: #22c55e; color: #022c22; font-size: 26px;
-    box-shadow: 0 8px 24px rgba(34,197,94,0.5); z-index: 30; padding: 0;
-    display: flex; align-items: center; justify-content: center;
-  }
+  .empty{text-align:center;padding:30px 10px;color:var(--dim);font-size:13px;}
+  .empty .big{font-size:28px;margin-bottom:6px;}
 
-  .type-toggle { display: flex; gap: 8px; margin-top: 3px; }
-  .type-toggle button { flex: 1; background: #f1f5f9; color: #334155; justify-content: center; }
-  .type-toggle button.active.income { background: #22c55e; color: #022c22; }
-  .type-toggle button.active.expense { background: #ef4444; color: white; }
+  .upload{border:1.5px dashed var(--gold-dim);border-radius:10px;padding:20px 14px;text-align:center;cursor:pointer;background:rgba(216,164,65,.04);}
+  .upload .ic{font-size:26px;margin-bottom:6px;}
+  .upload .t1{font-size:13px;font-weight:600;color:var(--gold);}
+  .upload .t2{font-size:11px;color:var(--dim);margin-top:3px;}
+  .thumb{width:100%;max-height:180px;object-fit:contain;border-radius:8px;margin-bottom:10px;background:#000;}
 
-  .hint { font-size: 11px; color: #94a3b8; margin-top: 4px; }
-  .ai-slip-box { margin-top: 8px; padding: 10px; background:#f0fdf4; border:1px dashed #86efac; border-radius:10px; font-size:12px; }
-  .spinner {
-    border: 2px solid #f3f3f3; border-top: 2px solid #22c55e; border-radius: 50%;
-    width: 13px; height: 13px; animation: spin 1s linear infinite; display: inline-block;
-  }
-  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  .scan-status{display:flex;align-items:center;gap:8px;padding:10px;background:var(--panel2);border-radius:8px;font-size:12.5px;color:var(--gold);margin-bottom:10px;}
+  .dot-anim{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:pulse 1s infinite ease-in-out;}
+  @keyframes pulse{0%,100%{opacity:.3;}50%{opacity:1;}}
 
-  .cart-item { display:flex; justify-content:space-between; align-items:center; padding:6px 8px; background:#f8fafc; border-radius:8px; margin-top:6px; font-size:13px; }
+  .item-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px;margin-bottom:10px;}
+  .item-top{display:flex;justify-content:space-between;align-items:flex-start;}
+  .item-name{font-family:var(--serif);font-size:15px;font-weight:600;}
+  .item-sn{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:2px;}
+  .status-pill{font-family:var(--mono);font-size:9.5px;padding:3px 8px;border-radius:20px;letter-spacing:.5px;flex-shrink:0;}
+  .status-pill.stock{background:rgba(124,148,115,.18);color:var(--moss);}
+  .status-pill.sold{background:rgba(201,106,68,.15);color:var(--rust);}
+  .provenance{margin-top:8px;font-size:11.5px;color:var(--dim);line-height:1.6;}
+  .provenance b{color:var(--ink);font-weight:500;}
+  .cost-lines{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);}
+  .cost-line{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--dim);}
+  .cost-line b{color:var(--ink);font-family:var(--mono);font-weight:500;}
+  .cost-total{display:flex;justify-content:space-between;font-size:13px;padding-top:6px;margin-top:4px;border-top:1px dashed var(--line);font-weight:600;}
+  .profit-line{display:flex;justify-content:space-between;font-size:13px;padding-top:6px;font-weight:600;color:var(--gold);}
+  .thumb-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+  .slip-thumb{width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--line);cursor:pointer;}
+  .snrow{display:flex;gap:8px;align-items:center;margin-bottom:8px;background:var(--panel2);padding:8px;border-radius:7px;}
+  .snrow input,.snrow select{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:7px 8px;font-size:12.5px;}
+  .snrow .idx{font-family:var(--mono);font-size:11px;color:var(--dim);width:16px;}
 
-  @media (max-width: 640px) {
-    .col-3, .col-4, .col-6 { flex: 0 0 100%; }
-    header h1 { font-size: 16px; }
-  }
+  .fab-inner{position:fixed;bottom:20px;right:calc(50% - 240px + 16px);z-index:30;}
+  @media (max-width:512px){.fab-inner{right:16px;}}
+  .fab-btn{background:var(--gold);color:#1a1200;border:none;width:52px;height:52px;border-radius:50%;font-size:24px;font-weight:700;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.4);}
+
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:none;align-items:flex-end;justify-content:center;}
+  .modal-backdrop.open{display:flex;}
+  .modal{background:var(--bg);width:100%;max-width:480px;max-height:88vh;overflow-y:auto;border-radius:16px 16px 0 0;padding:18px 16px 24px;border-top:1px solid var(--line);}
+  .modal-handle{width:36px;height:4px;background:var(--line);border-radius:2px;margin:0 auto 14px;}
+  .modal h2{font-family:var(--serif);font-size:18px;margin:0 0 14px;}
+
+  .invoice-paper{background:var(--paper);color:#1a1a12;border-radius:8px;padding:20px;font-family:var(--sans);}
+  .invoice-paper .ihead{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a1a12;padding-bottom:12px;margin-bottom:14px;}
+  .invoice-paper h2{font-family:var(--serif);font-size:19px;margin:0;}
+  .invoice-paper .inum{font-family:var(--mono);font-size:11px;color:#555;margin-top:3px;}
+  .invoice-paper .shopinfo{font-size:11px;color:#555;line-height:1.5;margin-top:6px;}
+  .invoice-paper .irow{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid #ccc4a8;}
+  .invoice-paper .itotal{display:flex;justify-content:space-between;font-size:16px;font-weight:700;padding-top:10px;margin-top:6px;}
+  .invoice-paper .words{font-size:11px;color:#666;margin-top:4px;font-style:italic;}
+  .invoice-paper .sig{display:flex;justify-content:space-between;margin-top:34px;font-size:11px;text-align:center;}
+  .invoice-paper .sig div{width:44%;border-top:1px solid #1a1a12;padding-top:6px;}
+  .cost-box{background:#e2ded0;border-radius:6px;padding:10px 12px;margin-top:12px;font-size:12px;}
+  .cost-box .r{display:flex;justify-content:space-between;padding:2px 0;}
+  .cost-box .r.p{font-weight:700;color:#6b4d1f;}
+
+  .toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);color:var(--ink);padding:10px 16px;border-radius:20px;font-size:12.5px;z-index:60;max-width:90%;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.4);}
+
+  ::-webkit-scrollbar{width:0;height:0;}
 </style>
 </head>
 <body>
+<div id="app">
 
-<header>
-  <div class="header-top">
+  <div class="topbar">
     <div>
-      <h1>FrameLedger</h1>
-      <div class="subtitle">บัญชีร้านกล้องมือสอง — ต้นทุนต่อตัว, SN, สลิป AI</div>
+      <div class="brand"><div class="mark"></div><h1>FrameLedger</h1></div>
+      <div class="sub" id="shopSub">บัญชีร้านกล้องมือสอง — ต้นทุนต่อตัว, SN, สลิป AI</div>
     </div>
-    <button class="gear-btn" id="btn-settings" title="ตั้งค่า">⚙</button>
+    <button class="gearbtn" onclick="openProfileModal()">⚙</button>
   </div>
-  <div class="nav">
-    <button data-page="dashboard" class="active">แดชบอร์ด</button>
-    <button data-page="ledger">รายรับ-จ่าย</button>
-    <button data-page="stock">คลังกล้อง</button>
-    <button data-page="invoice">ออกบิล</button>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="dashboard">แดชบอร์ด</button>
+    <button class="tab" data-tab="transactions">รายรับ-จ่าย</button>
+    <button class="tab" data-tab="inventory">คลังกล้อง</button>
+    <button class="tab" data-tab="invoice">ออกบิล</button>
   </div>
-</header>
 
-<div id="toast" class="toast"></div>
-
-<!-- Settings modal -->
-<div id="modal-settings" class="modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h3>⚙ ตั้งค่า</h3>
-      <button class="close-modal" onclick="closeModal('modal-settings')">&times;</button>
+  <div class="view active" id="view-dashboard">
+    <div class="stat-grid">
+      <div class="stat income"><div class="lbl">รายรับรวม</div><div class="val" id="statIncome">฿0</div></div>
+      <div class="stat expense"><div class="lbl">รายจ่ายรวม</div><div class="val" id="statExpense">฿0</div></div>
+      <div class="stat profit"><div class="lbl">กำไรสุทธิ</div><div class="val" id="statProfit">฿0</div></div>
+      <div class="stat"><div class="lbl">มูลค่าสต็อกคงเหลือ</div><div class="val" id="statStock">฿0</div></div>
     </div>
-    <label>Claude API Key (สำหรับอ่านสลิป AI)
-      <input id="set-api-key" type="password" placeholder="sk-ant-..." />
-    </label>
-    <div class="hint">คีย์นี้จะถูกเก็บไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น และถูกส่งตรงไปยัง Anthropic API เพื่ออ่านสลิปเท่านั้น ไม่ถูกส่งไปที่อื่น</div>
-    <label>Claude Model
-      <input id="set-api-model" type="text" placeholder="claude-sonnet-5" />
-    </label>
-    <div class="modal-footer" style="justify-content:space-between;">
-      <button class="btn-danger btn-sm" onclick="clearAllData()">🗑 ล้างข้อมูลทั้งหมด</button>
-      <button class="btn-primary" onclick="saveSettingsModal()">บันทึก</button>
+    <div class="card">
+      <h3>ประมาณการภาษี</h3>
+      <div class="taxrow"><label>อัตราภาษีที่ตั้งไว้ (%)</label><input type="number" id="taxRateInput" value="5" step="0.5"></div>
+      <div class="taxrow"><label>ภาษีโดยประมาณจากรายรับ</label><b id="taxEstimate" style="font-family:var(--mono);font-size:13px;">฿0</b></div>
+    </div>
+    <div class="card">
+      <h3>สำรอง / ส่งออกข้อมูล (เพื่อสรรพากรตรวจสอบ)</h3>
+      <div class="hint" style="margin-bottom:10px;">ข้อมูลทั้งหมดเก็บในเครื่องนี้เท่านั้น กดสำรอง/ส่งออกเป็นระยะเพื่อความปลอดภัย</div>
+      <div class="row-btns" style="margin-bottom:8px;">
+        <button class="btn small ghost" style="flex:1;" onclick="exportJSON()">⬇ JSON</button>
+        <button class="btn small ghost" style="flex:1;" onclick="exportCSV()">⬇ CSV</button>
+      </div>
+      <button class="btn primary small" style="width:100%;" onclick="backupToDrive()">☁ สำรองขึ้น Google Drive</button>
+    </div>
+    <div class="card"><h3>รายการล่าสุด</h3><div id="recentTx"></div></div>
+  </div>
+
+  <div class="view" id="view-transactions">
+    <div class="card" id="txListCard"><h3>รายการรายรับ-รายจ่ายทั้งหมด</h3><div id="txList"></div></div>
+  </div>
+
+  <div class="view" id="view-inventory">
+    <div class="segmented2">
+      <button class="on" id="costModeDetailed" onclick="setCostMode('detailed')">ดูต้นทุนรายตัว</button>
+      <button id="costModeLump" onclick="setCostMode('lump')">ดูภาพรวมอย่างเดียว</button>
+    </div>
+    <div id="invList"></div>
+  </div>
+
+  <div class="view" id="view-invoice">
+    <div class="card">
+      <h3>สร้างบิลขาย</h3>
+      <div class="field"><label>เลือกกล้องจากคลัง (สินค้าที่ยังไม่ขาย)</label><select id="invItemSelect"></select></div>
+      <div class="field"><label>ชื่อลูกค้า</label><input id="invCustomer" placeholder="ชื่อลูกค้า"></div>
+      <div class="field field-row">
+        <div class="field"><label>ราคาขาย (บาท)</label><input type="number" id="invPrice" placeholder="0"></div>
+        <div class="field"><label>วันที่</label><input type="date" id="invDate"></div>
+      </div>
+      <div class="field">
+        <label>แนบสลิปโอนเงินจากลูกค้า (ไม่บังคับ)</label>
+        <input type="file" accept="image/*" id="invSlipInput" onchange="handleInvSlip(event)">
+      </div>
+      <img id="invSlipThumb" class="thumb" style="display:none;max-height:120px;">
+      <button class="btn primary" onclick="generateInvoice()">สร้างบิล + บันทึกรายรับ</button>
+    </div>
+    <div id="invoicePreview"></div>
+    <div class="card" id="invoiceHistoryCard"><h3>ประวัติบิลที่ออก</h3><div id="invoiceHistory"></div></div>
+  </div>
+
+  <div class="fab-inner"><button class="fab-btn" onclick="openAddModal()">+</button></div>
+</div>
+
+<!-- PROFILE MODAL -->
+<div class="modal-backdrop" id="profileModalBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>ข้อมูลร้าน / เจ้าของร้าน</h2>
+    <div class="hint" style="margin-bottom:12px;">ข้อมูลนี้จะใช้พิมพ์บนบิลขายและใบแทนใบเสร็จอัตโนมัติ</div>
+    <div class="field"><label>ชื่อร้าน</label><input id="pShopName" placeholder="เช่น ร้านธนภัทร มิกซ์โฮม"></div>
+    <div class="field"><label>ชื่อเจ้าของร้าน</label><input id="pOwnerName" placeholder="ชื่อ-นามสกุล"></div>
+    <div class="field"><label>ที่อยู่</label><textarea id="pAddress" placeholder="เลขที่ / หมู่ / ตำบล / อำเภอ / จังหวัด / รหัสไปรษณีย์"></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>เบอร์โทร</label><input id="pPhone" placeholder="08xxxxxxxx"></div>
+      <div class="field"><label>เลขผู้เสียภาษี</label><input id="pTaxId" placeholder="13 หลัก"></div>
+    </div>
+    <div class="field" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
+      <label>Claude API Key (สำหรับสลิป AI)</label>
+      <input type="password" id="pApiKey" placeholder="sk-ant-...">
+      <div class="hint">คีย์นี้จะถูกเก็บไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น และถูกส่งตรงไปยัง Anthropic API เพื่ออ่านสลิปเท่านั้น ไม่ถูกส่งไปที่อื่น</div>
+    </div>
+    <div class="row-btns" style="margin-top:6px;">
+      <button class="btn ghost" onclick="closeProfileModal()">ปิด</button>
+      <button class="btn primary" onclick="saveProfile()">บันทึก</button>
     </div>
   </div>
 </div>
 
-<!-- Quick add transaction modal -->
-<div id="modal-txn" class="modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h3>+ เพิ่มรายการ</h3>
-      <button class="close-modal" onclick="closeModal('modal-txn')">&times;</button>
+<!-- ADD TRANSACTION MODAL -->
+<div class="modal-backdrop" id="txModalBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>เพิ่มรายรับ / รายจ่าย</h2>
+    <div class="upload" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+      <div class="ic">📎</div><div class="t1">แนบรูปสลิป / บิล / ใบเสร็จ</div>
+      <div class="t2">AI จะอ่านยอดเงิน วันที่ และประเภทให้อัตโนมัติ</div>
     </div>
-    <label>ประเภท
-      <div class="type-toggle">
-        <button type="button" class="active income" id="txn-type-income" onclick="setTxnType('income')">รายรับ</button>
-        <button type="button" class="expense" id="txn-type-expense" onclick="setTxnType('expense')">รายจ่าย</button>
-      </div>
-    </label>
-    <input type="hidden" id="txn-type" value="income">
-    <div class="row">
-      <div class="col-6">
-        <label>วันที่
-          <input id="txn-date" type="text" placeholder="YYYY-MM-DD" />
-        </label>
-      </div>
-      <div class="col-6">
-        <label>จำนวนเงิน
-          <input id="txn-amount" type="number" step="0.01" />
-        </label>
-      </div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFileUpload(event)">
+    <img id="receiptThumb" class="thumb" style="display:none">
+    <div class="scan-status" id="scanStatus" style="display:none"><div class="dot-anim"></div><span id="scanStatusText">AI กำลังอ่านสลิป...</span></div>
+
+    <div class="segmented" style="margin:12px 0;">
+      <button class="on income" id="typeBtnIncome" onclick="setTxType('income')">รายรับ</button>
+      <button class="expense" id="typeBtnExpense" onclick="setTxType('expense')">รายจ่าย</button>
     </div>
-    <label>หมวดหมู่
-      <input id="txn-category" placeholder="เช่น ขายกล้อง / ค่าเช่าร้าน / ค่าส่ง" />
-    </label>
-    <label>โน้ต
-      <textarea id="txn-note"></textarea>
-    </label>
-    <div class="modal-footer">
-      <button class="btn-outline" onclick="closeModal('modal-txn')">ยกเลิก</button>
-      <button class="btn-primary" onclick="saveTxnModal()">บันทึก</button>
+
+    <div class="field"><label>รายการ / ร้านค้า / ผู้ขาย</label><input id="fVendor" placeholder="เช่น AliExpress, ลูกค้า, ร้านอะไหล่"></div>
+    <div class="field-row">
+      <div class="field"><label>จำนวนเงิน (บาท)</label><input type="number" id="fAmount" oninput="updateStockAddPreview()" placeholder="0"></div>
+      <div class="field"><label>วันที่</label><input type="date" id="fDate"></div>
+    </div>
+    <div class="field">
+      <label>หมวดหมู่</label>
+      <select id="fCategory" onchange="onCategoryChange()">
+        <option value="ขายกล้อง/เลนส์">ขายกล้อง/เลนส์</option>
+        <option value="ซื้อกล้อง/เลนส์เข้าสต็อก">ซื้อกล้อง/เลนส์เข้าสต็อก</option>
+        <option value="อะไหล่">อะไหล่</option>
+        <option value="ค่าแรงช่าง">ค่าแรงช่าง</option>
+        <option value="ค่าจัดส่ง">ค่าจัดส่ง</option>
+        <option value="ค่าใช้จ่ายเบ็ดเตล็ด">ค่าใช้จ่ายเบ็ดเตล็ด</option>
+        <option value="อื่นๆ">อื่นๆ</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>ผูกกับกล้องตัวไหนในคลัง (ไม่บังคับ — ใช้คำนวณต้นทุนต่อตัว)</label>
+      <select id="fLinkItem"><option value="">— ไม่ผูก —</option></select>
+    </div>
+    <div class="field"><label>โน้ต</label><textarea id="fNote" placeholder="รายละเอียดเพิ่มเติม"></textarea></div>
+
+    <div class="checkrow" onclick="toggleStockAdd()">
+      <input type="checkbox" id="addAsStock" onclick="event.stopPropagation();toggleStockAdd()">
+      <span>เพิ่มรายการนี้เข้าคลังสต็อกด้วย (กรอกจำนวน + SN + สภาพ)</span>
+    </div>
+    <div id="stockAddBlock" style="display:none;">
+      <div class="field"><label>ชื่อรุ่นกล้อง/เลนส์</label><input id="stkName" placeholder="เช่น Canon 5D Mark III"></div>
+      <div class="field"><label>จำนวน (ตัว/ชิ้น)</label><input type="number" id="stkQty" min="1" value="1" oninput="renderSNRows()"></div>
+      <div id="snRowsWrap"></div>
+      <div class="hint">ต้นทุนต่อตัวจะหารเฉลี่ยจากยอดรายจ่ายด้านบนอัตโนมัติ ปรับทีหลังได้ในคลัง</div>
+    </div>
+
+    <div class="row-btns" style="margin-top:10px;">
+      <button class="btn ghost" onclick="openReceiptGenFromTx()">📄 ไม่มีใบเสร็จ? สร้างใบแทน</button>
+    </div>
+    <div class="row-btns" style="margin-top:8px;">
+      <button class="btn ghost" onclick="closeAddModal()">ยกเลิก</button>
+      <button class="btn primary" onclick="saveTransaction()">บันทึก</button>
     </div>
   </div>
 </div>
 
-<!-- DASHBOARD -->
-<div id="page-dashboard" class="page">
-  <div class="stat-grid">
-    <div class="stat-card">
-      <div class="stat-label">รายรับรวม</div>
-      <div class="stat-value pos" id="stat-income">฿0</div>
+<!-- ADD INVENTORY MODAL -->
+<div class="modal-backdrop" id="invModalBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>รับกล้อง/เลนส์เข้าคลัง</h2>
+    <div class="field"><label>ชื่อรุ่น</label><input id="iName" placeholder="เช่น Canon 5D Mark III"></div>
+    <div class="field-row">
+      <div class="field"><label>Serial Number (SN)</label><input id="iSN" placeholder="เช่น 123456789"></div>
+      <div class="field"><label>รหัสสินค้า</label><input id="iCode" placeholder="เช่น CAM-0001"></div>
     </div>
-    <div class="stat-card">
-      <div class="stat-label">รายจ่ายรวม</div>
-      <div class="stat-value neg" id="stat-expense">฿0</div>
+    <div class="field"><label>สภาพสินค้า</label><input id="iCondition" placeholder="เช่น มือสอง สภาพดี 90%"></div>
+    <div class="field"><label>ซื้อมาจากใคร / ร้านไหน</label><input id="iSupplier" placeholder="ชื่อผู้ขาย/ร้านค้า"></div>
+    <div class="field-row">
+      <div class="field"><label>ราคาต้นทุนที่ซื้อเข้ามา (บาท)</label><input type="number" id="iCost" placeholder="0"></div>
+      <div class="field"><label>วันที่รับเข้า</label><input type="date" id="iDate"></div>
     </div>
-    <div class="stat-card">
-      <div class="stat-label">กำไรสุทธิ</div>
-      <div class="stat-value" id="stat-profit">฿0</div>
+    <div class="field">
+      <label>แนบรูปหลักฐานการซื้อ (ไม่บังคับ)</label>
+      <input type="file" accept="image/*" id="iEvidenceInput" onchange="handleInvEvidence(event)">
     </div>
-    <div class="stat-card">
-      <div class="stat-label">มูลค่าสต็อกคงเหลือ</div>
-      <div class="stat-value" id="stat-stockvalue">฿0</div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>ประมาณการภาษี</h2>
-    <label>อัตราภาษีที่ตั้งไว้ (%)
-      <input id="tax-rate" type="number" step="0.01" value="0" />
-    </label>
-    <div style="margin-top:10px;font-size:13px;">
-      ภาษีโดยประมาณจากรายรับ<br>
-      <span style="font-size:20px;font-weight:600;" id="stat-tax">฿0</span>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>สำรอง / ส่งออกข้อมูล (เพื่อสรรพากรตรวจสอบ)</h2>
-    <p style="font-size:12px;color:#64748b;">ข้อมูลทั้งหมดเก็บในเครื่องนี้เท่านั้น กดสำรอง/ส่งออกเป็นระยะเพื่อความปลอดภัย</p>
-    <div class="row">
-      <div class="col-4"><button class="btn-outline btn-block" onclick="exportJSON()">⬇ JSON</button></div>
-      <div class="col-4"><button class="btn-outline btn-block" onclick="exportCSV()">⬇ CSV</button></div>
-      <div class="col-4"><button class="btn-outline btn-block" onclick="backupGoogleDrive()">☁ สำรองขึ้น Google Drive</button></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>รายการล่าสุด</h2>
-    <div id="recent-list"></div>
-  </div>
-</div>
-
-<!-- LEDGER (INCOME-EXPENSE) -->
-<div id="page-ledger" class="page" style="display:none;">
-  <div class="card">
-    <h2>เพิ่มรายรับ-จ่าย</h2>
-    <label>ประเภท
-      <div class="type-toggle">
-        <button type="button" class="active income" id="ltxn-type-income" onclick="setLedgerType('income')">รายรับ</button>
-        <button type="button" class="expense" id="ltxn-type-expense" onclick="setLedgerType('expense')">รายจ่าย</button>
-      </div>
-    </label>
-    <input type="hidden" id="ltxn-type" value="income">
-    <div class="row">
-      <div class="col-6">
-        <label>วันที่
-          <input id="ltxn-date" type="text" placeholder="YYYY-MM-DD" />
-        </label>
-      </div>
-      <div class="col-6">
-        <label>จำนวนเงิน
-          <input id="ltxn-amount" type="number" step="0.01" />
-        </label>
-      </div>
-    </div>
-    <label>หมวดหมู่
-      <input id="ltxn-category" placeholder="เช่น ขายกล้อง / ค่าเช่าร้าน / ค่าส่ง" />
-    </label>
-    <label>โน้ต
-      <textarea id="ltxn-note"></textarea>
-    </label>
-    <br>
-    <button class="btn-primary" onclick="addLedgerTxn()">บันทึกรายการ</button>
-  </div>
-
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h2>ประวัติรายรับ-จ่าย</h2>
-    </div>
-    <div class="filter-tabs">
-      <button class="active" data-lfilter="all">ทั้งหมด</button>
-      <button data-lfilter="income">รายรับ</button>
-      <button data-lfilter="expense">รายจ่าย</button>
-    </div>
-    <div style="max-height:420px;overflow:auto;">
-      <table>
-        <thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>จำนวนเงิน</th><th>โน้ต</th><th></th></tr></thead>
-        <tbody id="ledger-tbody"></tbody>
-      </table>
+    <img id="iEvidenceThumb" class="thumb" style="display:none;max-height:120px;">
+    <div class="row-btns" style="margin-top:6px;">
+      <button class="btn ghost" onclick="closeInvModal()">ยกเลิก</button>
+      <button class="btn primary" onclick="saveInventoryItem()">บันทึกเข้าคลัง</button>
     </div>
   </div>
 </div>
 
-<!-- STOCK -->
-<div id="page-stock" class="page" style="display:none;">
-  <div class="card">
-    <h2>เพิ่มกล้องเข้าสต็อก</h2>
-
-    <div class="ai-slip-box">
-      📷 <strong>สลิป AI</strong> — อัพโหลดรูปสลิป/ใบเสร็จเพื่อให้ AI ช่วยกรอกต้นทุน วันที่ และร้านค้าให้อัตโนมัติ
-      <input id="ai-slip-file" type="file" accept="image/*" capture="environment" style="margin-top:6px;" onchange="handleAiSlip(event)" />
-      <div id="ai-slip-status" style="margin-top:6px;"></div>
+<!-- MARK SOLD MODAL -->
+<div class="modal-backdrop" id="soldModalBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>บันทึกการขาย</h2>
+    <div class="field"><label>ราคาขาย (บาท)</label><input type="number" id="sPrice" placeholder="0"></div>
+    <div class="field"><label>ลูกค้า</label><input id="sCustomer" placeholder="ชื่อลูกค้า"></div>
+    <div class="field"><label>วันที่ขาย</label><input type="date" id="sDate"></div>
+    <div class="field">
+      <label>แนบสลิปโอนเงินจากลูกค้า (ไม่บังคับ)</label>
+      <input type="file" accept="image/*" id="sSlipInput" onchange="handleSoldSlip(event)">
     </div>
-
-    <div class="row" style="margin-top:10px;">
-      <div class="col-4">
-        <label>ยี่ห้อ (Brand)
-          <input id="stk-brand" placeholder="Canon / Sony / Fujifilm" />
-        </label>
-      </div>
-      <div class="col-4">
-        <label>รุ่น (Model)
-          <input id="stk-model" />
-        </label>
-      </div>
-      <div class="col-4">
-        <label>Serial Number
-          <input id="stk-sn" />
-        </label>
-      </div>
-
-      <div class="col-4">
-        <label>ต้นทุนต่อตัว (base cost)
-          <input id="stk-base-cost" type="number" step="0.01" />
-        </label>
-      </div>
-      <div class="col-4">
-        <label>ค่าใช้จ่ายอื่นๆ (ค่าส่ง ฯลฯ)
-          <input id="stk-other-cost" type="number" step="0.01" value="0" />
-        </label>
-      </div>
-      <div class="col-4">
-        <label>ราคาตั้งขาย
-          <input id="stk-list-price" type="number" step="0.01" />
-        </label>
-      </div>
-
-      <div class="col-6">
-        <label>วันที่รับของ (YYYY-MM-DD)
-          <input id="stk-received-at" />
-        </label>
-      </div>
-      <div class="col-6">
-        <label>โน้ต / ร้านที่ซื้อ
-          <input id="stk-note" />
-        </label>
-      </div>
-
-      <div class="col-12">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
-          <input type="checkbox" id="stk-auto-expense" checked style="width:auto;margin:0;" />
-          บันทึกต้นทุนเป็นรายจ่ายอัตโนมัติในรายรับ-จ่าย
-        </label>
-      </div>
-    </div>
-    <br>
-    <button class="btn-primary" onclick="addStockItem()">บันทึกกล้องเข้าสต็อก</button>
-  </div>
-
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h2>รายการสต็อก</h2>
-    </div>
-    <div class="filter-tabs">
-      <button class="active" data-sfilter="available">พร้อมขาย</button>
-      <button data-sfilter="sold">ขายแล้ว</button>
-      <button data-sfilter="all">ทั้งหมด</button>
-    </div>
-    <div style="max-height:420px;overflow:auto;">
-      <table>
-        <thead><tr><th>สินค้า</th><th>SN</th><th>Status</th><th>ต้นทุน</th><th>ตั้งขาย</th><th>ขายจริง</th><th></th></tr></thead>
-        <tbody id="stock-tbody"></tbody>
-      </table>
+    <img id="sSlipThumb" class="thumb" style="display:none;max-height:120px;">
+    <div class="row-btns" style="margin-top:6px;">
+      <button class="btn ghost" onclick="closeSoldModal()">ยกเลิก</button>
+      <button class="btn primary" onclick="confirmSold()">ยืนยันขาย</button>
     </div>
   </div>
 </div>
 
-<!-- INVOICE -->
-<div id="page-invoice" class="page" style="display:none;">
-  <div class="card">
-    <h2>ออกบิลขาย</h2>
-    <div class="row">
-      <div class="col-4">
-        <label>วันที่ขาย
-          <input id="inv-date" placeholder="YYYY-MM-DD" />
-        </label>
-      </div>
-      <div class="col-4">
-        <label>ชื่อลูกค้า
-          <input id="inv-customer" />
-        </label>
-      </div>
-      <div class="col-4">
-        <label>ช่องทาง / วิธีจ่าย
-          <input id="inv-channel" placeholder="FB / Shopee / โอน / สด" />
-        </label>
-      </div>
-    </div>
-
-    <label>เลือกสินค้าจากสต็อก
-      <select id="inv-item-select"></select>
-    </label>
-    <div class="row">
-      <div class="col-6">
-        <label>ราคาขาย
-          <input id="inv-item-price" type="number" step="0.01" />
-        </label>
-      </div>
-      <div class="col-6">
-        <label>&nbsp;</label>
-        <button class="btn-outline btn-block" onclick="addInvoiceCartItem()">+ เพิ่มลงบิล</button>
-      </div>
-    </div>
-
-    <div id="invoice-cart"></div>
-
-    <div class="row" style="margin-top:10px;">
-      <div class="col-6">
-        <label>ค่าส่ง / ค่าธรรมเนียม (บวก)
-          <input id="inv-fee" type="number" step="0.01" value="0" />
-        </label>
-      </div>
-      <div class="col-6">
-        <label>ส่วนลด (ลบ)
-          <input id="inv-discount" type="number" step="0.01" value="0" />
-        </label>
-      </div>
-    </div>
-
-    <div style="margin-top:10px;font-size:15px;font-weight:600;">
-      ยอดรวมบิล: <span id="invoice-total">฿0</span>
-    </div>
-    <br>
-    <button class="btn-primary" onclick="submitInvoice()">บันทึกบิล / ปิดการขาย</button>
-  </div>
-
-  <div class="card">
-    <h2>ประวัติบิลขาย</h2>
-    <div style="max-height:420px;overflow:auto;">
-      <table>
-        <thead><tr><th>วันที่</th><th>บิล</th><th>ลูกค้า</th><th>จำนวนชิ้น</th><th>ยอดรวม</th></tr></thead>
-        <tbody id="invoice-tbody"></tbody>
-      </table>
+<!-- EVIDENCE UPLOAD FOR EXISTING ITEM -->
+<div class="modal-backdrop" id="evidModalBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>แนบรูปหลักฐาน</h2>
+    <input type="file" accept="image/*" id="evidFileInput" onchange="handleExistingEvidence(event)">
+    <img id="evidThumb" class="thumb" style="display:none;max-height:150px;">
+    <div class="row-btns" style="margin-top:10px;">
+      <button class="btn ghost" onclick="closeEvidModal()">ยกเลิก</button>
+      <button class="btn primary" onclick="saveExistingEvidence()">บันทึกรูป</button>
     </div>
   </div>
 </div>
 
-<button class="fab" id="btn-fab" title="เพิ่มรายการ">+</button>
+<!-- SUBSTITUTE RECEIPT GENERATOR MODAL -->
+<div class="modal-backdrop" id="recModalBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>สร้างใบแทนใบเสร็จรับเงิน</h2>
+    <div class="hint" style="margin-bottom:10px;">ใช้เมื่อซื้อของแล้วผู้ขายไม่มีใบเสร็จให้ (เช่น ซื้อจากบุคคล/AliExpress)</div>
+    <div class="field"><label>รายละเอียดสินค้า/บริการ</label><input id="rDesc" placeholder="เช่น สำหรับ Canon 5D Mark III"></div>
+    <div class="field-row">
+      <div class="field"><label>จำนวนเงินสินค้า (บาท)</label><input type="number" id="rAmount" placeholder="0"></div>
+      <div class="field"><label>ค่าจัดส่ง (บาท)</label><input type="number" id="rShipping" placeholder="0" value="0"></div>
+    </div>
+    <div class="field"><label>วันที่</label><input type="date" id="rDate"></div>
+    <div class="row-btns" style="margin-top:6px;">
+      <button class="btn ghost" onclick="closeRecModal()">ยกเลิก</button>
+      <button class="btn primary" onclick="createSubstituteReceipt()">สร้างเอกสาร</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUBSTITUTE RECEIPT PREVIEW MODAL -->
+<div class="modal-backdrop" id="recPreviewBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>ใบแทนใบเสร็จรับเงิน</h2>
+    <div id="recPreviewContent"></div>
+    <div class="row-btns" style="margin-top:12px;">
+      <button class="btn ghost" onclick="closeRecPreview()">ปิด</button>
+      <button class="btn primary" onclick="window.print()">พิมพ์ / บันทึกเป็น PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- SLIP VIEW MODAL -->
+<div class="modal-backdrop" id="slipViewBackdrop" onclick="closeSlipView(event)">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-handle"></div>
+    <img id="slipViewImg" style="width:100%;border-radius:8px;">
+  </div>
+</div>
 
 <script>
-  /* ---------- storage ---------- */
-  const STORE_KEYS = { items: 'fl_items', txns: 'fl_transactions', invoices: 'fl_invoices', settings: 'fl_settings' };
+let transactions = [];
+let inventory = [];
+let invoices = [];
+let receipts = [];
+let settings = { taxRate: 5, costMode:'detailed', claudeApiKey:'', claudeModel:'claude-sonnet-5', profile: { shopName:'', ownerName:'', address:'', phone:'', taxId:'' } };
+let currentTxType = 'income';
+let pendingImageBase64 = null;   // for AI scan (raw base64, no data: prefix)
+let pendingImageDataUrl = null;  // compressed data URL to attach to stock item
+let invSlipDataUrl = null;
+let soldSlipDataUrl = null;
+let invEvidenceDataUrl = null;
+let existingEvidenceDataUrl = null;
+let evidTargetId = null;
+let soldTargetId = null;
 
-  function loadArr(key) { try { return JSON.parse(localStorage.getItem(key)) || []; } catch(e) { return []; } }
-  function saveArr(key, arr) { localStorage.setItem(key, JSON.stringify(arr)); }
-  function loadSettings() {
-    try { return JSON.parse(localStorage.getItem(STORE_KEYS.settings)) || {}; } catch(e) { return {}; }
-  }
-  function saveSettings(s) { localStorage.setItem(STORE_KEYS.settings, JSON.stringify(s)); }
+const todayStr = () => new Date().toISOString().slice(0,10);
+const fmt = n => '฿' + (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2});
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
-  let items = loadArr(STORE_KEYS.items);
-  let txns = loadArr(STORE_KEYS.txns);
-  let invoices = loadArr(STORE_KEYS.invoices);
-  let cart = [];
-  let ledgerFilter = 'all';
-  let stockFilter = 'available';
+function showToast(msg, ms=3200){
+  const t = document.createElement('div');
+  t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), ms);
+}
 
-  function uid(prefix) { return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
-  function todayStr() {
-    const d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  }
-  function money(n) {
-    const num = Number(n || 0);
-    if (isNaN(num)) return '฿0';
-    return '฿' + num.toLocaleString('th-TH', {maximumFractionDigits:0});
-  }
-
-  function showToast(message, isError = false) {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = 'toast show' + (isError ? ' error' : '');
-    setTimeout(() => toast.className = 'toast', 3000);
-  }
-  function openModal(id) { document.getElementById(id).classList.add('show'); }
-  function closeModal(id) { document.getElementById(id).classList.remove('show'); }
-
-  /* ---------- nav ---------- */
-  document.querySelectorAll('.nav button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const page = btn.dataset.page;
-      document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
-      document.getElementById('page-' + page).style.display = 'block';
-      if (page === 'dashboard') renderDashboard();
-      if (page === 'ledger') renderLedger();
-      if (page === 'stock') renderStock();
-      if (page === 'invoice') renderInvoicePage();
-    });
-  });
-
-  /* ---------- settings modal ---------- */
-  document.getElementById('btn-settings').addEventListener('click', () => {
-    const s = loadSettings();
-    document.getElementById('set-api-key').value = s.claudeApiKey || '';
-    document.getElementById('set-api-model').value = s.claudeModel || 'claude-sonnet-5';
-    openModal('modal-settings');
-  });
-  function saveSettingsModal() {
-    const s = loadSettings();
-    s.claudeApiKey = document.getElementById('set-api-key').value.trim();
-    s.claudeModel = document.getElementById('set-api-model').value.trim() || 'claude-sonnet-5';
-    saveSettings(s);
-    closeModal('modal-settings');
-    showToast('บันทึกการตั้งค่าแล้ว');
-  }
-  function clearAllData() {
-    if (!confirm('ต้องการล้างข้อมูลทั้งหมด (สต็อก, รายรับ-จ่าย, บิล) ถาวรหรือไม่? การกระทำนี้ย้อนกลับไม่ได้')) return;
-    items = []; txns = []; invoices = [];
-    saveArr(STORE_KEYS.items, items); saveArr(STORE_KEYS.txns, txns); saveArr(STORE_KEYS.invoices, invoices);
-    closeModal('modal-settings');
-    showToast('ล้างข้อมูลแล้ว');
-    renderDashboard();
-  }
-
-  /* ---------- FAB / quick add txn ---------- */
-  document.getElementById('btn-fab').addEventListener('click', () => {
-    document.getElementById('txn-date').value = todayStr();
-    document.getElementById('txn-amount').value = '';
-    document.getElementById('txn-category').value = '';
-    document.getElementById('txn-note').value = '';
-    setTxnType('income');
-    openModal('modal-txn');
-  });
-  function setTxnType(type) {
-    document.getElementById('txn-type').value = type;
-    document.getElementById('txn-type-income').classList.toggle('active', type === 'income');
-    document.getElementById('txn-type-expense').classList.toggle('active', type === 'expense');
-  }
-  function saveTxnModal() {
-    const amount = Number(document.getElementById('txn-amount').value);
-    if (!amount || amount <= 0) { showToast('กรุณาใส่จำนวนเงิน', true); return; }
-    addTransaction({
-      type: document.getElementById('txn-type').value,
-      date: document.getElementById('txn-date').value || todayStr(),
-      category: document.getElementById('txn-category').value || 'ไม่ระบุ',
-      amount,
-      note: document.getElementById('txn-note').value
-    });
-    closeModal('modal-txn');
-    showToast('บันทึกรายการแล้ว');
-    renderDashboard();
-  }
-
-  function addTransaction(t) {
-    txns.push({ id: uid('txn'), type: t.type, date: t.date, category: t.category, amount: Number(t.amount), note: t.note || '', linked_item_id: t.linked_item_id || null, invoice_id: t.invoice_id || null });
-    saveArr(STORE_KEYS.txns, txns);
-  }
-  function deleteTransaction(id) {
-    if (!confirm('ลบรายการนี้หรือไม่?')) return;
-    txns = txns.filter(t => t.id !== id);
-    saveArr(STORE_KEYS.txns, txns);
-    renderLedger(); renderDashboard();
-  }
-
-  /* ---------- dashboard ---------- */
-  function renderDashboard() {
-    const totalIncome = txns.filter(t => t.type === 'income').reduce((s,t) => s + Number(t.amount||0), 0);
-    const totalExpense = txns.filter(t => t.type === 'expense').reduce((s,t) => s + Number(t.amount||0), 0);
-    const netProfit = totalIncome - totalExpense;
-    const stockValue = items.filter(it => it.status !== 'ขายแล้ว').reduce((s,it) => s + Number(it.total_cost||0), 0);
-
-    document.getElementById('stat-income').textContent = money(totalIncome);
-    document.getElementById('stat-expense').textContent = money(totalExpense);
-    const profitEl = document.getElementById('stat-profit');
-    profitEl.textContent = money(netProfit);
-    profitEl.className = 'stat-value ' + (netProfit >= 0 ? 'pos' : 'neg');
-    document.getElementById('stat-stockvalue').textContent = money(stockValue);
-
-    const settings = loadSettings();
-    const savedRate = settings.taxRate != null ? settings.taxRate : 0;
-    const taxInput = document.getElementById('tax-rate');
-    if (document.activeElement !== taxInput) taxInput.value = savedRate;
-    updateTaxEstimate(totalIncome);
-
-    const recent = txns.slice().sort((a,b) => (b.date||'').localeCompare(a.date||'') || b.id.localeCompare(a.id)).slice(0, 8);
-    const container = document.getElementById('recent-list');
-    container.innerHTML = '';
-    if (!recent.length) {
-      container.innerHTML = '<p style="font-size:13px;color:#94a3b8;">ยังไม่มีรายการ</p>';
-    } else {
-      recent.forEach(t => {
-        const div = document.createElement('div');
-        div.className = 'recent-item';
-        div.innerHTML = `
-          <div>
-            <span class="tag ${t.type}">${t.type === 'income' ? 'รายรับ' : 'รายจ่าย'}</span>
-            <strong style="margin-left:6px;">${t.category}</strong><br>
-            <span style="font-size:11px;color:#94a3b8;">${t.date || ''}</span>
-          </div>
-          <div class="recent-amt ${t.type}">${t.type === 'income' ? '+' : '-'}${money(t.amount)}</div>
-        `;
-        container.appendChild(div);
-      });
-    }
-  }
-
-  function updateTaxEstimate(totalIncome) {
-    const rate = Number(document.getElementById('tax-rate').value || 0);
-    document.getElementById('stat-tax').textContent = money(totalIncome * rate / 100);
-  }
-  document.getElementById('tax-rate').addEventListener('input', () => {
-    const s = loadSettings();
-    s.taxRate = Number(document.getElementById('tax-rate').value || 0);
-    saveSettings(s);
-    const totalIncome = txns.filter(t => t.type === 'income').reduce((s,t) => s + Number(t.amount||0), 0);
-    updateTaxEstimate(totalIncome);
-  });
-
-  /* ---------- export ---------- */
-  function downloadBlob(content, filename, mime) {
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-  function exportJSON() {
-    const settings = loadSettings();
-    const exportSettings = { taxRate: settings.taxRate || 0, claudeModel: settings.claudeModel || '' };
-    const data = { exportedAt: new Date().toISOString(), items, transactions: txns, invoices, settings: exportSettings };
-    downloadBlob(JSON.stringify(data, null, 2), `frameledger-backup-${todayStr()}.json`, 'application/json');
-    showToast('ส่งออก JSON แล้ว');
-  }
-  function csvEscape(v) {
-    const s = String(v == null ? '' : v);
-    return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
-  }
-  function exportCSV() {
-    const header = ['date','type','category','amount','note'];
-    const rows = txns.slice().sort((a,b) => (a.date||'').localeCompare(b.date||''))
-      .map(t => [t.date, t.type, t.category, t.amount, t.note].map(csvEscape).join(','));
-    const csv = [header.join(','), ...rows].join('\n');
-    downloadBlob('﻿' + csv, `frameledger-transactions-${todayStr()}.csv`, 'text/csv');
-    showToast('ส่งออก CSV แล้ว');
-  }
-  function backupGoogleDrive() {
-    showToast('ฟีเจอร์นี้ยังไม่เปิดใช้งาน — ต้องตั้งค่า Google OAuth ก่อนใช้งานจริง', true);
-  }
-
-  /* ---------- ledger page ---------- */
-  document.querySelectorAll('[data-lfilter]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-lfilter]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      ledgerFilter = btn.dataset.lfilter;
-      renderLedger();
-    });
-  });
-  function setLedgerType(type) {
-    document.getElementById('ltxn-type').value = type;
-    document.getElementById('ltxn-type-income').classList.toggle('active', type === 'income');
-    document.getElementById('ltxn-type-expense').classList.toggle('active', type === 'expense');
-  }
-  function addLedgerTxn() {
-    const amount = Number(document.getElementById('ltxn-amount').value);
-    if (!amount || amount <= 0) { showToast('กรุณาใส่จำนวนเงิน', true); return; }
-    addTransaction({
-      type: document.getElementById('ltxn-type').value,
-      date: document.getElementById('ltxn-date').value || todayStr(),
-      category: document.getElementById('ltxn-category').value || 'ไม่ระบุ',
-      amount,
-      note: document.getElementById('ltxn-note').value
-    });
-    document.getElementById('ltxn-amount').value = '';
-    document.getElementById('ltxn-category').value = '';
-    document.getElementById('ltxn-note').value = '';
-    showToast('บันทึกรายการแล้ว');
-    renderLedger();
-  }
-  function renderLedger() {
-    let list = txns.slice();
-    if (ledgerFilter !== 'all') list = list.filter(t => t.type === ledgerFilter);
-    list.sort((a,b) => (b.date||'').localeCompare(a.date||'') || b.id.localeCompare(a.id));
-    const tbody = document.getElementById('ledger-tbody');
-    tbody.innerHTML = '';
-    if (!list.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;">ไม่มีรายการ</td></tr>';
-      return;
-    }
-    list.forEach(t => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${t.date || ''}</td>
-        <td><span class="tag ${t.type}">${t.type === 'income' ? 'รายรับ' : 'รายจ่าย'}</span></td>
-        <td>${t.category}</td>
-        <td class="recent-amt ${t.type}">${t.type === 'income' ? '+' : '-'}${money(t.amount)}</td>
-        <td>${t.note || ''}</td>
-        <td><button class="btn-outline btn-sm" onclick="deleteTransaction('${t.id}')">ลบ</button></td>
-      `;
-      tbody.appendChild(tr);
-    });
-  }
-
-  /* ---------- stock page ---------- */
-  document.querySelectorAll('[data-sfilter]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-sfilter]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      stockFilter = btn.dataset.sfilter;
-      renderStock();
-    });
-  });
-
-  function addStockItem() {
-    const brand = document.getElementById('stk-brand').value.trim();
-    const model = document.getElementById('stk-model').value.trim();
-    if (!brand && !model) { showToast('กรุณาใส่ยี่ห้อหรือรุ่น', true); return; }
-    const baseCost = Number(document.getElementById('stk-base-cost').value || 0);
-    const otherCost = Number(document.getElementById('stk-other-cost').value || 0);
-    const totalCost = baseCost + otherCost;
-    const receivedAt = document.getElementById('stk-received-at').value || todayStr();
-
-    const item = {
-      id: uid('item'),
-      brand, model,
-      sn: document.getElementById('stk-sn').value.trim(),
-      base_cost: baseCost,
-      other_cost: otherCost,
-      total_cost: totalCost,
-      list_price: Number(document.getElementById('stk-list-price').value || 0),
-      received_at: receivedAt,
-      note: document.getElementById('stk-note').value,
-      status: 'พร้อมขาย',
-      sold_price: null,
-      sold_at: null
+// ---------- Image compression ----------
+function compressImage(file, maxDim=900, quality=0.62){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if(w > h && w > maxDim){ h = Math.round(h*maxDim/w); w = maxDim; }
+        else if(h > maxDim){ w = Math.round(w*maxDim/h); h = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
     };
-    items.push(item);
-    saveArr(STORE_KEYS.items, items);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
-    if (document.getElementById('stk-auto-expense').checked && totalCost > 0) {
-      addTransaction({
-        type: 'expense',
-        date: receivedAt,
-        category: 'ซื้อกล้อง',
-        amount: totalCost,
-        note: `${brand} ${model} SN:${item.sn}`.trim(),
-        linked_item_id: item.id
-      });
-    }
-
-    ['stk-brand','stk-model','stk-sn','stk-base-cost','stk-other-cost','stk-list-price','stk-received-at','stk-note'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('ai-slip-status').innerHTML = '';
-    showToast('เพิ่มกล้องเข้าสต็อกแล้ว');
-    renderStock();
-    renderDashboard();
-  }
-
-  function renderStock() {
-    let list = items.slice();
-    if (stockFilter === 'available') list = list.filter(it => it.status !== 'ขายแล้ว');
-    if (stockFilter === 'sold') list = list.filter(it => it.status === 'ขายแล้ว');
-    list.sort((a,b) => (b.received_at||'').localeCompare(a.received_at||''));
-
-    const tbody = document.getElementById('stock-tbody');
-    tbody.innerHTML = '';
-    if (!list.length) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#94a3b8;">ไม่มีรายการ</td></tr>';
-      return;
-    }
-    list.forEach(it => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><strong>${it.brand} ${it.model}</strong></td>
-        <td>${it.sn || ''}</td>
-        <td><span class="tag ${it.status === 'ขายแล้ว' ? 'sold' : 'ready'}">${it.status}</span></td>
-        <td>${money(it.total_cost)}</td>
-        <td>${money(it.list_price)}</td>
-        <td>${it.sold_price ? money(it.sold_price) : '-'}</td>
-        <td><button class="btn-danger btn-sm" onclick="deleteStockItem('${it.id}')">ลบ</button></td>
-      `;
-      tbody.appendChild(tr);
-    });
-  }
-
-  function deleteStockItem(id) {
-    if (!confirm('ลบสินค้านี้ออกจากสต็อกหรือไม่?')) return;
-    items = items.filter(it => it.id !== id);
-    saveArr(STORE_KEYS.items, items);
-    renderStock(); renderDashboard();
-  }
-
-  /* ---------- AI slip ---------- */
-  function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
-  async function handleAiSlip(evt) {
-    const file = evt.target.files[0];
-    if (!file) return;
-    const statusEl = document.getElementById('ai-slip-status');
-    const settings = loadSettings();
-    if (!settings.claudeApiKey) {
-      statusEl.innerHTML = '⚠️ กรุณาตั้งค่า Claude API Key ในหน้าตั้งค่า (⚙) ก่อนใช้งานสลิป AI';
-      return;
-    }
-    statusEl.innerHTML = '<span class="spinner"></span> กำลังอ่านสลิปด้วย AI...';
-    try {
-      const base64 = await fileToBase64(file);
-      const result = await callClaudeVision(base64, file.type || 'image/jpeg', settings);
-      if (result.amount != null) document.getElementById('stk-base-cost').value = result.amount;
-      if (result.date) document.getElementById('stk-received-at').value = result.date;
-      if (result.vendor || result.note) {
-        document.getElementById('stk-note').value = [result.vendor, result.note].filter(Boolean).join(' - ');
+function bahtText(number){
+  const txtNum=['ศูนย์','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'];
+  const txtDigit=['','สิบ','ร้อย','พัน','หมื่น','แสน'];
+  function convert(numStr){
+    numStr = numStr.replace(/^0+(?=\d)/,'');
+    let result=''; const len=numStr.length;
+    for(let i=0;i<len;i++){
+      const digit=parseInt(numStr[i]); const place=len-i-1;
+      if(digit!==0){
+        if(place===0 && digit===1 && len>1){ result+='เอ็ด'; }
+        else if(place===1 && digit===2){ result+='ยี่'+txtDigit[1]; }
+        else if(place===1 && digit===1){ result+=txtDigit[1]; }
+        else { result += txtNum[digit] + (txtDigit[place]||''); }
       }
-      statusEl.innerHTML = '✅ อ่านสลิปสำเร็จ กรุณาตรวจสอบข้อมูลก่อนบันทึก';
-    } catch (err) {
-      console.error(err);
-      statusEl.innerHTML = '❌ อ่านสลิปไม่สำเร็จ: ' + err.message;
     }
+    return result;
   }
+  number = parseFloat(number || 0).toFixed(2);
+  const [intPartRaw, decPart] = number.split('.');
+  let intPart = intPartRaw;
+  let millionChunks=[]; let temp=intPart;
+  while(temp.length>6){ millionChunks.unshift(temp.slice(-6)); temp=temp.slice(0,-6); }
+  millionChunks.unshift(temp);
+  let intText = millionChunks.map(c => (c==='' || parseInt(c)===0) ? '' : convert(c)).join('ล้าน');
+  if(parseInt(intPart)===0) intText='ศูนย์';
+  let out = intText + 'บาท';
+  out += (decPart==='00') ? 'ถ้วน' : (convert(decPart)+'สตางค์');
+  return out;
+}
 
-  async function callClaudeVision(base64Data, mediaType, settings) {
-    const model = settings.claudeModel || 'claude-sonnet-5';
-    const body = {
-      model,
-      max_tokens: 1024,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
-          { type: 'text', text: 'อ่านสลิป/ใบเสร็จนี้ แล้วตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นนอกเหนือจาก JSON รูปแบบ: {"amount": ตัวเลขจำนวนเงินรวม, "date": "YYYY-MM-DD", "vendor": "ชื่อผู้ขายหรือร้านค้า", "note": "รายละเอียดสั้นๆของรายการ"} ถ้าอ่านฟิลด์ไหนไม่ได้ให้ใส่ null' }
-        ]
-      }]
-    };
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
+// ---------- Storage (localStorage) ----------
+const STORAGE_PREFIX = 'frameledger_';
+let storageWarned = false;
+async function loadAll(){
+  try{ const v = localStorage.getItem(STORAGE_PREFIX+'transactions'); transactions = v?JSON.parse(v):[]; }catch(e){ transactions=[]; }
+  try{ const v = localStorage.getItem(STORAGE_PREFIX+'inventory'); inventory = v?JSON.parse(v):[]; }catch(e){ inventory=[]; }
+  try{ const v = localStorage.getItem(STORAGE_PREFIX+'invoices'); invoices = v?JSON.parse(v):[]; }catch(e){ invoices=[]; }
+  try{ const v = localStorage.getItem(STORAGE_PREFIX+'receipts'); receipts = v?JSON.parse(v):[]; }catch(e){ receipts=[]; }
+  try{
+    const v = localStorage.getItem(STORAGE_PREFIX+'settings');
+    if(v) settings = JSON.parse(v);
+    if(!settings.profile) settings.profile={shopName:'',ownerName:'',address:'',phone:'',taxId:''};
+    if(!settings.costMode) settings.costMode='detailed';
+    if(!settings.claudeModel) settings.claudeModel='claude-sonnet-5';
+    if(settings.claudeApiKey==null) settings.claudeApiKey='';
+  }catch(e){}
+  document.getElementById('taxRateInput').value = settings.taxRate;
+  setCostMode(settings.costMode, true);
+  updateShopSub();
+  renderAll();
+}
+async function persist(key,val){
+  try{
+    localStorage.setItem(STORAGE_PREFIX+key, JSON.stringify(val));
+    return true;
+  }catch(e){
+    console.error('storage failed for '+key, e);
+    if(!storageWarned){ storageWarned=true; showToast('⚠ บันทึกอัตโนมัติมีปัญหาชั่วคราว ข้อมูลยังใช้งานได้ในเซสชันนี้ — ลองกด ⬇ JSON เพื่อสำรองไว้'); }
+    return false;
+  }
+}
+const saveTransactions=()=>persist('transactions',transactions);
+const saveInventory=()=>persist('inventory',inventory);
+const saveInvoices=()=>persist('invoices',invoices);
+const saveReceipts=()=>persist('receipts',receipts);
+const saveSettings=()=>persist('settings',settings);
+
+function updateShopSub(){
+  const p = settings.profile;
+  document.getElementById('shopSub').textContent = p.shopName ? `${p.shopName} — ต้นทุนต่อตัว, SN, สลิป AI` : 'บัญชีร้านกล้องมือสอง — ต้นทุนต่อตัว, SN, สลิป AI';
+}
+
+// ---------- Tabs ----------
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('view-'+t.dataset.tab).classList.add('active');
+    if(t.dataset.tab==='invoice') populateInvoiceItemSelect();
+  });
+});
+
+function setCostMode(mode, silent){
+  settings.costMode = mode;
+  document.getElementById('costModeDetailed').classList.toggle('on', mode==='detailed');
+  document.getElementById('costModeLump').classList.toggle('on', mode==='lump');
+  if(!silent){ saveSettings(); renderInventory(); }
+}
+
+// ---------- Profile ----------
+function openProfileModal(){
+  const p = settings.profile;
+  document.getElementById('pShopName').value = p.shopName||'';
+  document.getElementById('pOwnerName').value = p.ownerName||'';
+  document.getElementById('pAddress').value = p.address||'';
+  document.getElementById('pPhone').value = p.phone||'';
+  document.getElementById('pTaxId').value = p.taxId||'';
+  document.getElementById('pApiKey').value = settings.claudeApiKey||'';
+  document.getElementById('profileModalBackdrop').classList.add('open');
+}
+function closeProfileModal(){ document.getElementById('profileModalBackdrop').classList.remove('open'); }
+async function saveProfile(){
+  settings.profile = {
+    shopName: document.getElementById('pShopName').value.trim(),
+    ownerName: document.getElementById('pOwnerName').value.trim(),
+    address: document.getElementById('pAddress').value.trim(),
+    phone: document.getElementById('pPhone').value.trim(),
+    taxId: document.getElementById('pTaxId').value.trim()
+  };
+  settings.claudeApiKey = document.getElementById('pApiKey').value.trim();
+  await saveSettings();
+  updateShopSub();
+  closeProfileModal();
+}
+
+// ---------- Transaction modal ----------
+function openAddModal(){
+  document.getElementById('fDate').value = todayStr();
+  populateLinkItemSelect();
+  document.getElementById('addAsStock').checked = false;
+  document.getElementById('stockAddBlock').style.display='none';
+  document.getElementById('snRowsWrap').innerHTML='';
+  document.getElementById('stkQty').value=1;
+  document.getElementById('stkName').value='';
+  document.getElementById('txModalBackdrop').classList.add('open');
+}
+function closeAddModal(){
+  document.getElementById('txModalBackdrop').classList.remove('open');
+  document.getElementById('receiptThumb').style.display='none';
+  document.getElementById('scanStatus').style.display='none';
+  pendingImageBase64 = null; pendingImageDataUrl = null;
+  ['fVendor','fAmount','fNote'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fLinkItem').value='';
+}
+function setTxType(t){
+  currentTxType = t;
+  document.getElementById('typeBtnIncome').classList.toggle('on', t==='income');
+  document.getElementById('typeBtnExpense').classList.toggle('on', t==='expense');
+}
+function populateLinkItemSelect(){
+  const sel = document.getElementById('fLinkItem');
+  sel.innerHTML = '<option value="">— ไม่ผูก —</option>' + inventory.map(i=>`<option value="${i.id}">${i.name} (SN: ${i.sn||'-'})</option>`).join('');
+}
+function onCategoryChange(){
+  const cat = document.getElementById('fCategory').value;
+  if(cat==='ซื้อกล้อง/เลนส์เข้าสต็อก'){
+    document.getElementById('addAsStock').checked = true;
+    toggleStockAdd(true);
+    document.getElementById('stkName').value = document.getElementById('fVendor').value ? document.getElementById('stkName').value : '';
+  }
+}
+function toggleStockAdd(forceOpen){
+  const cb = document.getElementById('addAsStock');
+  if(forceOpen!==true) {} // checkbox already toggled by click before this runs when from row click
+  const show = cb.checked;
+  document.getElementById('stockAddBlock').style.display = show ? 'block':'none';
+  if(show) renderSNRows();
+}
+function renderSNRows(){
+  let qty = parseInt(document.getElementById('stkQty').value)||1;
+  if(qty<1) qty=1; if(qty>20) qty=20;
+  const wrap = document.getElementById('snRowsWrap');
+  let html='';
+  for(let i=0;i<qty;i++){
+    html += `<div class="snrow">
+      <span class="idx">${i+1}</span>
+      <input placeholder="SN (ถ้ามี)" data-role="sn" data-i="${i}">
+      <input placeholder="สภาพ เช่น มือ2 90%" data-role="cond" data-i="${i}">
+    </div>`;
+  }
+  wrap.innerHTML = html;
+}
+function updateStockAddPreview(){ /* amount changes just used at save time */ }
+
+function handleFileUpload(e){
+  const file = e.target.files[0]; if(!file) return;
+  compressImage(file, 900, 0.6).then(async dataUrl => {
+    pendingImageDataUrl = dataUrl;
+    pendingImageBase64 = dataUrl.split(',')[1];
+    document.getElementById('receiptThumb').src = dataUrl;
+    document.getElementById('receiptThumb').style.display='block';
+    await scanReceipt(pendingImageBase64, 'image/jpeg');
+  }).catch(()=>showToast('ประมวลผลรูปไม่สำเร็จ ลองใหม่อีกครั้ง'));
+}
+async function scanReceipt(base64, mediaType){
+  const statusEl = document.getElementById('scanStatus');
+  const statusText = document.getElementById('scanStatusText');
+  if(!settings.claudeApiKey){
+    statusEl.style.display='flex';
+    statusText.textContent = '⚠ กรุณาตั้งค่า Claude API Key ที่ปุ่ม ⚙ ก่อนใช้สลิป AI';
+    return;
+  }
+  statusEl.style.display='flex'; statusText.textContent='AI กำลังอ่านสลิป...';
+  try{
+    const resp = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
         'x-api-key': settings.claudeApiKey,
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true'
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify({
+        model: settings.claudeModel || 'claude-sonnet-5', max_tokens:1000,
+        messages:[{ role:'user', content:[
+          {type:'image', source:{type:'base64', media_type:mediaType, data:base64}},
+          {type:'text', text:'นี่คือรูปสลิป/ใบเสร็จ/บิลของร้านขายกล้องมือสอง วิเคราะห์แล้วตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นนอกเหนือจาก JSON ห้ามใช้ markdown code fence รูปแบบ JSON: {"vendor": "ชื่อร้าน/คู่ค้า", "date": "YYYY-MM-DD", "amount": ตัวเลขจำนวนเงินรวมสุดท้าย, "type": "income หรือ expense", "category": "หนึ่งใน [ขายกล้อง/เลนส์, ซื้อกล้อง/เลนส์เข้าสต็อก, อะไหล่, ค่าแรงช่าง, ค่าจัดส่ง, ค่าใช้จ่ายเบ็ดเตล็ด, อื่นๆ]", "note": "สรุปสั้นๆ", "isCameraOrLensPurchase": true หรือ false, "itemName": "ชื่อรุ่นกล้อง/เลนส์ถ้าระบุได้ ไม่งั้นว่าง", "quantity": จำนวนชิ้นถ้าเป็นการซื้อกล้อง/เลนส์ (ปกติ 1)}'}
+        ]}]
+      })
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.error?.message || 'เรียก API ไม่สำเร็จ');
-    const text = (data.content && data.content[0] && data.content[0].text) || '';
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('ไม่พบข้อมูล JSON ในคำตอบของ AI');
-    return JSON.parse(jsonMatch[0]);
-  }
-
-  /* ---------- invoice page ---------- */
-  function renderInvoicePage() {
-    document.getElementById('inv-date').value = document.getElementById('inv-date').value || todayStr();
-    const select = document.getElementById('inv-item-select');
-    const available = items.filter(it => it.status !== 'ขายแล้ว' && !cart.find(c => c.item_id === it.id));
-    select.innerHTML = available.length
-      ? available.map(it => `<option value="${it.id}">${it.brand} ${it.model} (${it.sn || 'no SN'}) - ตั้งขาย ${money(it.list_price)}</option>`).join('')
-      : '<option value="">ไม่มีสินค้าพร้อมขาย</option>';
-    renderCart();
-    renderInvoiceHistory();
-  }
-
-  function addInvoiceCartItem() {
-    const select = document.getElementById('inv-item-select');
-    const itemId = select.value;
-    if (!itemId) { showToast('ไม่มีสินค้าให้เลือก', true); return; }
-    const item = items.find(it => it.id === itemId);
-    let price = Number(document.getElementById('inv-item-price').value);
-    if (!price) price = Number(item.list_price || 0);
-    cart.push({ item_id: item.id, name: `${item.brand} ${item.model}`, price });
-    document.getElementById('inv-item-price').value = '';
-    renderInvoicePage();
-  }
-
-  function removeCartItem(itemId) {
-    cart = cart.filter(c => c.item_id !== itemId);
-    renderInvoicePage();
-  }
-
-  function renderCart() {
-    const container = document.getElementById('invoice-cart');
-    container.innerHTML = '';
-    cart.forEach(c => {
-      const div = document.createElement('div');
-      div.className = 'cart-item';
-      div.innerHTML = `<span>${c.name} — ${money(c.price)}</span> <button class="btn-outline btn-sm" onclick="removeCartItem('${c.item_id}')">ลบ</button>`;
-      container.appendChild(div);
-    });
-    const fee = Number(document.getElementById('inv-fee').value || 0);
-    const discount = Number(document.getElementById('inv-discount').value || 0);
-    const total = cart.reduce((s,c) => s + Number(c.price||0), 0) + fee - discount;
-    document.getElementById('invoice-total').textContent = money(total);
-  }
-  document.getElementById('inv-fee').addEventListener('input', renderCart);
-  document.getElementById('inv-discount').addEventListener('input', renderCart);
-
-  function submitInvoice() {
-    if (!cart.length) { showToast('กรุณาเพิ่มสินค้าลงบิลก่อน', true); return; }
-    const date = document.getElementById('inv-date').value || todayStr();
-    const customer = document.getElementById('inv-customer').value || 'ไม่ระบุ';
-    const channel = document.getElementById('inv-channel').value || '';
-    const fee = Number(document.getElementById('inv-fee').value || 0);
-    const discount = Number(document.getElementById('inv-discount').value || 0);
-    const total = cart.reduce((s,c) => s + Number(c.price||0), 0) + fee - discount;
-
-    const invoiceId = uid('inv');
-    cart.forEach(c => {
-      const item = items.find(it => it.id === c.item_id);
-      if (item) {
-        item.status = 'ขายแล้ว';
-        item.sold_price = c.price;
-        item.sold_at = date;
+    const data = await resp.json();
+    if(!resp.ok){ throw new Error((data && data.error && data.error.message) || 'เรียก API ไม่สำเร็จ'); }
+    const textBlock = (data.content||[]).find(b=>b.type==='text');
+    let parsed=null;
+    if(textBlock){ let clean = textBlock.text.replace(/```json|```/g,'').trim(); try{ parsed=JSON.parse(clean); }catch(e){ parsed=null; } }
+    if(parsed){
+      document.getElementById('fVendor').value = parsed.vendor || '';
+      document.getElementById('fAmount').value = parsed.amount || '';
+      document.getElementById('fDate').value = parsed.date || todayStr();
+      document.getElementById('fNote').value = parsed.note || '';
+      if(parsed.category) document.getElementById('fCategory').value = parsed.category;
+      setTxType(parsed.type==='income' ? 'income' : 'expense');
+      if(parsed.isCameraOrLensPurchase && parsed.type==='expense'){
+        document.getElementById('addAsStock').checked = true;
+        document.getElementById('stkName').value = parsed.itemName || '';
+        document.getElementById('stkQty').value = parsed.quantity || 1;
+        toggleStockAdd(true);
       }
-    });
-    saveArr(STORE_KEYS.items, items);
-
-    invoices.push({ id: invoiceId, date, customer, channel, items: cart.slice(), total });
-    saveArr(STORE_KEYS.invoices, invoices);
-
-    addTransaction({
-      type: 'income',
-      date,
-      category: 'ขายกล้อง',
-      amount: total,
-      note: `บิล ${invoiceId} - ${customer} (${cart.length} ชิ้น)`,
-      invoice_id: invoiceId
-    });
-
-    cart = [];
-    document.getElementById('inv-customer').value = '';
-    document.getElementById('inv-channel').value = '';
-    document.getElementById('inv-fee').value = '0';
-    document.getElementById('inv-discount').value = '0';
-    showToast('บันทึกบิลและปิดการขายแล้ว');
-    renderInvoicePage();
-    renderDashboard();
-  }
-
-  function renderInvoiceHistory() {
-    const list = invoices.slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
-    const tbody = document.getElementById('invoice-tbody');
-    tbody.innerHTML = '';
-    if (!list.length) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;">ยังไม่มีบิล</td></tr>';
-      return;
+      statusText.textContent = 'อ่านสำเร็จ — ตรวจสอบข้อมูลก่อนบันทึก';
+      setTimeout(()=>{ statusEl.style.display='none'; }, 1800);
+    } else {
+      statusText.textContent = 'อ่านสลิปไม่สำเร็จ กรุณากรอกข้อมูลเอง';
     }
-    list.forEach(inv => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${inv.date}</td>
-        <td>${inv.id}</td>
-        <td>${inv.customer}</td>
-        <td>${inv.items.length}</td>
-        <td>${money(inv.total)}</td>
-      `;
-      tbody.appendChild(tr);
-    });
+  }catch(err){ console.error(err); statusText.textContent='เกิดข้อผิดพลาด: '+err.message; }
+}
+async function saveTransaction(){
+  const amount = parseFloat(document.getElementById('fAmount').value);
+  if(!amount || amount<=0){ alert('กรุณากรอกจำนวนเงิน'); return; }
+  const tx = {
+    id: uid(), type: currentTxType,
+    vendor: document.getElementById('fVendor').value || '-',
+    amount, date: document.getElementById('fDate').value || todayStr(),
+    category: document.getElementById('fCategory').value,
+    note: document.getElementById('fNote').value,
+    linkedItemId: document.getElementById('fLinkItem').value || null
+  };
+  transactions.unshift(tx);
+
+  if(document.getElementById('addAsStock').checked && currentTxType==='expense'){
+    const name = document.getElementById('stkName').value.trim() || tx.category;
+    let qty = parseInt(document.getElementById('stkQty').value)||1; if(qty<1) qty=1;
+    const perUnitCost = amount / qty;
+    const rows = document.querySelectorAll('#snRowsWrap .snrow');
+    for(let i=0;i<qty;i++){
+      const row = rows[i];
+      const sn = row ? row.querySelector('[data-role="sn"]').value.trim() : '';
+      const cond = row ? row.querySelector('[data-role="cond"]').value.trim() : '';
+      inventory.unshift({
+        id: uid(), name, sn,
+        productCode: 'CAM-' + String(inventory.length+1+i).padStart(4,'0'),
+        condition: cond,
+        supplier: tx.vendor,
+        purchaseCost: Math.round(perUnitCost*100)/100,
+        dateIn: tx.date, status:'stock', salePrice:null, saleDate:null, customer:null, saleSlip:null,
+        evidencePhoto: pendingImageDataUrl || null
+      });
+    }
+    await saveInventory();
+    showToast(`เพิ่มเข้าคลังแล้ว ${qty} รายการ`);
   }
 
-  /* ---------- init ---------- */
-  renderDashboard();
+  await saveTransactions();
+  closeAddModal();
+  renderAll();
+}
+
+// ---------- Inventory ----------
+function openInvModal(){
+  document.getElementById('iDate').value = todayStr();
+  document.getElementById('iCode').value = 'CAM-' + String(inventory.length+1).padStart(4,'0');
+  invEvidenceDataUrl = null;
+  document.getElementById('iEvidenceThumb').style.display='none';
+  document.getElementById('invModalBackdrop').classList.add('open');
+}
+function closeInvModal(){
+  document.getElementById('invModalBackdrop').classList.remove('open');
+  ['iName','iSN','iCode','iSupplier','iCost','iCondition'].forEach(id=>document.getElementById(id).value='');
+}
+function handleInvEvidence(e){
+  const file=e.target.files[0]; if(!file) return;
+  compressImage(file,900,0.6).then(dataUrl=>{
+    invEvidenceDataUrl = dataUrl;
+    document.getElementById('iEvidenceThumb').src = dataUrl;
+    document.getElementById('iEvidenceThumb').style.display='block';
+  });
+}
+async function saveInventoryItem(){
+  const name = document.getElementById('iName').value.trim();
+  const cost = parseFloat(document.getElementById('iCost').value) || 0;
+  if(!name){ alert('กรุณากรอกชื่อรุ่น'); return; }
+  const item = {
+    id: uid(), name,
+    sn: document.getElementById('iSN').value.trim(),
+    productCode: document.getElementById('iCode').value.trim(),
+    condition: document.getElementById('iCondition').value.trim(),
+    supplier: document.getElementById('iSupplier').value.trim() || '-',
+    purchaseCost: cost,
+    dateIn: document.getElementById('iDate').value || todayStr(),
+    status: 'stock', salePrice:null, saleDate:null, customer:null, saleSlip:null,
+    evidencePhoto: invEvidenceDataUrl || null
+  };
+  inventory.unshift(item);
+  await saveInventory();
+  closeInvModal();
+  renderAll();
+}
+function itemCostBreakdown(itemId){
+  const linked = transactions.filter(t=>t.linkedItemId===itemId && t.type==='expense');
+  const extra = linked.reduce((s,t)=>s+t.amount,0);
+  const item = inventory.find(i=>i.id===itemId);
+  const total = (item?item.purchaseCost:0) + extra;
+  return { linked, total };
+}
+
+function handleSoldSlip(e){
+  const file=e.target.files[0]; if(!file) return;
+  compressImage(file,900,0.6).then(dataUrl=>{
+    soldSlipDataUrl = dataUrl;
+    document.getElementById('sSlipThumb').src = dataUrl;
+    document.getElementById('sSlipThumb').style.display='block';
+  });
+}
+function openSoldModal(itemId){
+  soldTargetId=itemId; soldSlipDataUrl=null;
+  document.getElementById('sDate').value = todayStr();
+  document.getElementById('sSlipThumb').style.display='none';
+  document.getElementById('sPrice').value=''; document.getElementById('sCustomer').value='';
+  document.getElementById('soldModalBackdrop').classList.add('open');
+}
+function closeSoldModal(){ document.getElementById('soldModalBackdrop').classList.remove('open'); soldTargetId=null; }
+async function confirmSold(){
+  const price = parseFloat(document.getElementById('sPrice').value);
+  if(!price || price<=0){ alert('กรุณากรอกราคาขาย'); return; }
+  const item = inventory.find(i=>i.id===soldTargetId); if(!item) return;
+  item.status='sold'; item.salePrice=price;
+  item.customer = document.getElementById('sCustomer').value || '-';
+  item.saleDate = document.getElementById('sDate').value || todayStr();
+  item.saleSlip = soldSlipDataUrl;
+  transactions.unshift({ id:uid(), type:'income', vendor:item.customer, amount:price, date:item.saleDate, category:'ขายกล้อง/เลนส์', note:`ขาย ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id });
+  await saveInventory(); await saveTransactions();
+  closeSoldModal(); renderAll();
+}
+async function reopenItem(itemId){
+  const item = inventory.find(i=>i.id===itemId); if(!item) return;
+  if(!confirm('เปลี่ยนสถานะกลับเป็นในคลัง? (รายการรายรับจากการขายจะยังอยู่ ต้องลบเองถ้าต้องการ)')) return;
+  item.status='stock'; item.salePrice=null; item.saleDate=null; item.customer=null; item.saleSlip=null;
+  await saveInventory(); renderAll();
+}
+async function deleteItem(itemId){
+  if(!confirm('ลบกล้องตัวนี้ออกจากคลัง?')) return;
+  inventory = inventory.filter(i=>i.id!==itemId);
+  await saveInventory(); renderAll();
+}
+async function deleteTx(txId){
+  if(!confirm('ลบรายการนี้?')) return;
+  transactions = transactions.filter(t=>t.id!==txId);
+  await saveTransactions(); renderAll();
+}
+function viewSlip(url){ document.getElementById('slipViewImg').src=url; document.getElementById('slipViewBackdrop').classList.add('open'); }
+function closeSlipView(e){ if(e.target.id==='slipViewBackdrop') document.getElementById('slipViewBackdrop').classList.remove('open'); }
+
+function openEvidModal(itemId){
+  evidTargetId = itemId; existingEvidenceDataUrl = null;
+  document.getElementById('evidThumb').style.display='none';
+  document.getElementById('evidModalBackdrop').classList.add('open');
+}
+function closeEvidModal(){ document.getElementById('evidModalBackdrop').classList.remove('open'); }
+function handleExistingEvidence(e){
+  const file=e.target.files[0]; if(!file) return;
+  compressImage(file,900,0.6).then(dataUrl=>{
+    existingEvidenceDataUrl = dataUrl;
+    document.getElementById('evidThumb').src = dataUrl;
+    document.getElementById('evidThumb').style.display='block';
+  });
+}
+async function saveExistingEvidence(){
+  if(!existingEvidenceDataUrl){ alert('เลือกรูปก่อน'); return; }
+  const item = inventory.find(i=>i.id===evidTargetId); if(!item) return;
+  item.evidencePhoto = existingEvidenceDataUrl;
+  await saveInventory();
+  closeEvidModal(); renderAll();
+}
+
+// ---------- Invoice ----------
+function populateInvoiceItemSelect(){
+  const sel = document.getElementById('invItemSelect');
+  const available = inventory.filter(i=>i.status==='stock');
+  sel.innerHTML = available.length ? available.map(i=>`<option value="${i.id}">${i.name} (SN: ${i.sn||'-'})</option>`).join('') : '<option value="">— ไม่มีสินค้าในคลัง —</option>';
+  document.getElementById('invDate').value = todayStr();
+  renderInvoiceHistory();
+}
+function handleInvSlip(e){
+  const file=e.target.files[0]; if(!file) return;
+  compressImage(file,900,0.6).then(dataUrl=>{
+    invSlipDataUrl = dataUrl;
+    document.getElementById('invSlipThumb').src = dataUrl;
+    document.getElementById('invSlipThumb').style.display='block';
+  });
+}
+async function generateInvoice(){
+  const itemId = document.getElementById('invItemSelect').value;
+  const item = inventory.find(i=>i.id===itemId);
+  const price = parseFloat(document.getElementById('invPrice').value);
+  const customer = document.getElementById('invCustomer').value || '-';
+  const date = document.getElementById('invDate').value || todayStr();
+  if(!item){ alert('เลือกกล้องที่จะขายก่อน'); return; }
+  if(!price || price<=0){ alert('กรอกราคาขาย'); return; }
+
+  const {total:cost} = itemCostBreakdown(item.id);
+  item.status='sold'; item.salePrice=price; item.customer=customer; item.saleDate=date; item.saleSlip=invSlipDataUrl;
+  transactions.unshift({ id:uid(), type:'income', vendor:customer, amount:price, date, category:'ขายกล้อง/เลนส์', note:`ขาย ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id });
+  const invNo = 'INV-' + (invoices.length+1).toString().padStart(4,'0');
+  const inv = { id:uid(), invNo, itemName:item.name, sn:item.sn, productCode:item.productCode, customer, price, date, cost, profit: price-cost };
+  invoices.unshift(inv);
+  await saveInventory(); await saveTransactions(); await saveInvoices();
+  renderInvoicePreview(inv);
+  populateInvoiceItemSelect();
+  document.getElementById('invPrice').value=''; document.getElementById('invCustomer').value='';
+  document.getElementById('invSlipThumb').style.display='none'; invSlipDataUrl=null;
+  renderAll();
+}
+function renderInvoicePreview(inv){
+  const p = settings.profile;
+  document.getElementById('invoicePreview').innerHTML = `
+    <div class="invoice-paper">
+      <div class="ihead">
+        <div>
+          <h2>ใบเสร็จรับเงิน</h2>
+          <div class="inum">${inv.invNo}</div>
+          ${p.shopName?`<div class="shopinfo"><b>${p.shopName}</b>${p.ownerName?' โดย '+p.ownerName:''}<br>${p.address||''}<br>${p.phone?'โทร '+p.phone:''} ${p.taxId?'· เลขผู้เสียภาษี '+p.taxId:''}</div>`:''}
+        </div>
+        <div style="text-align:right;font-size:12px;">${inv.date}</div>
+      </div>
+      <div class="irow"><span>ลูกค้า</span><b>${inv.customer}</b></div>
+      <div class="irow"><span>สินค้า</span><b>${inv.itemName}</b></div>
+      <div class="irow"><span>รหัสสินค้า / SN</span><b>${inv.productCode||'-'} / ${inv.sn||'-'}</b></div>
+      <div class="itotal"><span>ยอดรวม</span><span>${fmt(inv.price)}</span></div>
+      <div class="words">(${bahtText(inv.price)})</div>
+      <div class="cost-box">
+        <div class="r"><span>ต้นทุนสินค้ารวม</span><span>${fmt(inv.cost)}</span></div>
+        <div class="r p"><span>กำไรสุทธิรายการนี้</span><span>${fmt(inv.profit)}</span></div>
+      </div>
+      <div class="sig"><div>ผู้รับเงิน</div><div>ลูกค้า</div></div>
+    </div>`;
+}
+function renderInvoiceHistory(){
+  const el = document.getElementById('invoiceHistory');
+  if(!invoices.length){ el.innerHTML='<div class="empty">ยังไม่มีบิลที่ออก</div>'; return; }
+  el.innerHTML = invoices.map(inv=>`
+    <div class="tx">
+      <div class="l"><div class="name">${inv.invNo} — ${inv.itemName}</div><div class="meta">${inv.customer} · ${inv.date} · กำไร ${fmt(inv.profit)}</div></div>
+      <div class="amt income">${fmt(inv.price)}</div>
+    </div>`).join('');
+}
+
+// ---------- Substitute receipt ----------
+function openReceiptGenFromTx(){
+  document.getElementById('rDesc').value = document.getElementById('fVendor').value || document.getElementById('fNote').value || '';
+  document.getElementById('rAmount').value = document.getElementById('fAmount').value || '';
+  document.getElementById('rShipping').value = 0;
+  document.getElementById('rDate').value = document.getElementById('fDate').value || todayStr();
+  document.getElementById('recModalBackdrop').classList.add('open');
+}
+function closeRecModal(){ document.getElementById('recModalBackdrop').classList.remove('open'); }
+async function createSubstituteReceipt(){
+  const desc = document.getElementById('rDesc').value.trim();
+  const amount = parseFloat(document.getElementById('rAmount').value)||0;
+  const shipping = parseFloat(document.getElementById('rShipping').value)||0;
+  const date = document.getElementById('rDate').value || todayStr();
+  if(!desc || amount<=0){ alert('กรอกรายละเอียดและจำนวนเงิน'); return; }
+  const total = amount + shipping;
+  const rec = { id:uid(), recNo:'REC-'+(receipts.length+1).toString().padStart(4,'0'), desc, amount, shipping, total, date };
+  receipts.unshift(rec);
+  await saveReceipts();
+  closeRecModal();
+  renderSubReceiptPreview(rec);
+}
+function renderSubReceiptPreview(rec){
+  const p = settings.profile;
+  document.getElementById('recPreviewContent').innerHTML = `
+    <div class="invoice-paper">
+      <h2 style="text-align:center;font-size:17px;">ใบรับรองแทนใบเสร็จรับเงิน</h2>
+      <div style="font-size:12px;margin-top:12px;line-height:1.7;">
+        ผู้ซื้อ/ผู้รับบริการ: ${p.shopName||'-'}${p.ownerName?' โดย '+p.ownerName:''}<br>
+        ที่อยู่: ${p.address||'-'}<br>
+        เลขประจำตัวผู้เสียภาษี: ${p.taxId||'-'}<br>
+        โทร: ${p.phone||'-'}
+      </div>
+      <div style="text-align:right;font-size:12px;margin-top:8px;">วันที่: ${rec.date}</div>
+      <table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:12px;">
+        <tr style="border-bottom:1px solid #999;"><td style="padding:5px 0;">รายการ</td><td style="text-align:right;padding:5px 0;">จำนวนเงิน (บาท)</td></tr>
+        <tr style="border-bottom:1px solid #ccc4a8;"><td style="padding:5px 0;">${rec.desc}</td><td style="text-align:right;">${fmt(rec.amount)}</td></tr>
+        ${rec.shipping>0?`<tr style="border-bottom:1px solid #ccc4a8;"><td style="padding:5px 0;">ค่าจัดส่ง</td><td style="text-align:right;">${fmt(rec.shipping)}</td></tr>`:''}
+      </table>
+      <div class="itotal"><span>รวมทั้งสิ้น</span><span>${fmt(rec.total)}</span></div>
+      <div class="words">(${bahtText(rec.total)})</div>
+      <div style="font-size:11px;margin-top:14px;line-height:1.6;">
+        ข้าพเจ้า ${p.ownerName||'...........................'} ขอรับรองว่ารายจ่ายข้างต้นนี้ไม่อาจเรียกเก็บใบเสร็จรับเงินจากผู้รับได้ และข้าพเจ้าได้จ่ายไปในงานของทางร้านค้า/กิจการจริง ณ วันที่ ${rec.date}
+      </div>
+      <div class="sig"><div>ผู้เบิกจ่าย</div><div>ผู้อนุมัติ</div></div>
+    </div>`;
+  document.getElementById('recPreviewBackdrop').classList.add('open');
+}
+function closeRecPreview(){ document.getElementById('recPreviewBackdrop').classList.remove('open'); }
+
+// ---------- Export / Backup ----------
+function downloadBlob(content, filename, mime){
+  const blob = new Blob([content], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=filename; document.body.appendChild(a); a.click();
+  a.remove(); URL.revokeObjectURL(url);
+}
+function exportJSON(){
+  const payload = { exportedAt:new Date().toISOString(), profile:settings.profile, transactions, inventory, invoices, receipts };
+  downloadBlob(JSON.stringify(payload,null,2), `frameledger-backup-${todayStr()}.json`, 'application/json');
+}
+function exportCSV(){
+  let rows = [['วันที่','ประเภท','รายการ/ร้านค้า','หมวดหมู่','จำนวนเงิน','โน้ต','ผูกกับสินค้า']];
+  transactions.forEach(t=>{
+    const link = inventory.find(i=>i.id===t.linkedItemId);
+    rows.push([t.date, t.type==='income'?'รายรับ':'รายจ่าย', t.vendor, t.category, t.amount, t.note||'', link?link.name+' ('+(link.sn||'-')+')':'']);
+  });
+  const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  downloadBlob('\uFEFF'+csv, `frameledger-transactions-${todayStr()}.csv`, 'text/csv');
+}
+function backupToDrive(){
+  showToast('☁ ฟีเจอร์นี้ยังไม่เปิดใช้งาน — ต้องตั้งค่า Google OAuth ก่อนใช้งานจริง ลองใช้ปุ่ม ⬇ JSON แทนไปก่อน', 4500);
+}
+
+// ---------- Render ----------
+function renderAll(){
+  const totalIncome = transactions.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const totalExpense = transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const profit = totalIncome - totalExpense;
+  const stockValue = inventory.filter(i=>i.status==='stock').reduce((s,i)=>s+itemCostBreakdown(i.id).total,0);
+  document.getElementById('statIncome').textContent = fmt(totalIncome);
+  document.getElementById('statExpense').textContent = fmt(totalExpense);
+  document.getElementById('statProfit').textContent = fmt(profit);
+  document.getElementById('statStock').textContent = fmt(stockValue);
+  const taxRate = parseFloat(document.getElementById('taxRateInput').value)||0;
+  document.getElementById('taxEstimate').textContent = fmt(totalIncome*taxRate/100);
+
+  const recent = transactions.slice(0,5);
+  document.getElementById('recentTx').innerHTML = recent.length ? recent.map(txRowHtml).join('') : '<div class="empty">ยังไม่มีรายการ<br><span style="font-size:11px;">กด + เพื่อเริ่มบันทึก</span></div>';
+  const txList = document.getElementById('txList');
+  txList.innerHTML = transactions.length ? transactions.map(txRowHtml).join('') : '<div class="empty"><div class="big">🧾</div>ยังไม่มีรายการรายรับ-รายจ่าย</div>';
+
+  renderInventory();
+}
+function txRowHtml(t){
+  const link = inventory.find(i=>i.id===t.linkedItemId);
+  return `<div class="tx">
+    <div class="l">
+      <div class="name">${t.vendor}${t.note?' · '+t.note:''}</div>
+      <div class="meta">${t.date} · ${t.category}</div>
+      ${link?`<span class="badge">🔗 ${link.name}</span>`:''}
+    </div>
+    <div style="text-align:right;">
+      <div class="amt ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div>
+      <div onclick="deleteTx('${t.id}')" style="font-size:10px;color:var(--dim);cursor:pointer;margin-top:3px;">ลบ</div>
+    </div>
+  </div>`;
+}
+function renderInventory(){
+  const wrap = document.getElementById('invList');
+  const lump = settings.costMode==='lump';
+  let html = `<div class="card" style="display:flex;align-items:center;justify-content:space-between;">
+      <div><h3 style="margin:0;">คลังกล้อง/เลนส์</h3><div style="font-size:11px;color:var(--dim);margin-top:2px;">${inventory.length} รายการ</div></div>
+      <button class="btn primary small" onclick="openInvModal()">+ เพิ่มกล้อง</button>
+    </div>`;
+  if(!inventory.length){
+    html += '<div class="empty"><div class="big">📷</div>ยังไม่มีกล้องในคลัง</div>';
+  } else {
+    inventory.forEach(item=>{
+      const {linked,total} = itemCostBreakdown(item.id);
+      const profit = item.status==='sold' ? (item.salePrice-total) : null;
+      html += `<div class="item-card">
+        <div class="item-top">
+          <div><div class="item-name">${item.name}</div><div class="item-sn">SN: ${item.sn||'-'} · รหัส: ${item.productCode||'-'}${item.condition?' · '+item.condition:''}</div></div>
+          <span class="status-pill ${item.status==='stock'?'stock':'sold'}">${item.status==='stock'?'ในคลัง':'ขายแล้ว'}</span>
+        </div>
+        <div class="provenance">
+          ซื้อจาก <b>${item.supplier||'-'}</b> · รับเข้า <b>${item.dateIn}</b>
+          ${item.status==='sold'?`<br>ขายให้ <b>${item.customer}</b> · วันที่ขาย <b>${item.saleDate}</b>`:''}
+        </div>
+        <div class="cost-lines">
+          ${lump ? `
+            <div class="cost-line"><span>ต้นทุนรวม (โหมดภาพรวม)</span><b>${fmt(total)}</b></div>
+          ` : `
+            <div class="cost-line"><span>ต้นทุนซื้อเข้า</span><b>${fmt(item.purchaseCost)}</b></div>
+            ${linked.map(l=>`<div class="cost-line"><span>+ ${l.category}${l.note?' ('+l.note+')':''}</span><b>${fmt(l.amount)}</b></div>`).join('')}
+            <div class="cost-total"><span>ต้นทุนรวม</span><span>${fmt(total)}</span></div>
+          `}
+          ${item.status==='sold'?`
+            <div class="cost-line" style="margin-top:6px;"><span>ราคาขาย</span><b>${fmt(item.salePrice)}</b></div>
+            <div class="profit-line"><span>กำไร</span><span>${fmt(profit)}</span></div>
+          `:''}
+          <div class="thumb-row">
+            ${item.evidencePhoto?`<img src="${item.evidencePhoto}" class="slip-thumb" onclick="viewSlip('${item.evidencePhoto}')" title="หลักฐานการซื้อ">`:''}
+            ${item.saleSlip?`<img src="${item.saleSlip}" class="slip-thumb" onclick="viewSlip('${item.saleSlip}')" title="สลิปขาย">`:''}
+          </div>
+        </div>
+        <div class="row-btns" style="margin-top:10px;">
+          ${item.status==='stock'
+            ? `<button class="btn small primary" style="flex:1;" onclick="openSoldModal('${item.id}')">บันทึกขาย</button>`
+            : `<button class="btn small ghost" style="flex:1;" onclick="reopenItem('${item.id}')">ยกเลิกการขาย</button>`}
+          <button class="btn small ghost" onclick="openEvidModal('${item.id}')">📎</button>
+          <button class="btn small danger" onclick="deleteItem('${item.id}')">ลบ</button>
+        </div>
+      </div>`;
+    });
+  }
+  wrap.innerHTML = html;
+}
+
+document.getElementById('taxRateInput').addEventListener('input', async (e)=>{
+  settings.taxRate = parseFloat(e.target.value)||0;
+  await saveSettings();
+  renderAll();
+});
+
+loadAll();
 </script>
 </body>
 </html>
