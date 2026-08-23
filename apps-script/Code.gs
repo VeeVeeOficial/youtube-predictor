@@ -108,18 +108,30 @@ function jsonResponse_(obj) {
 }
 
 function doGet(e) {
-  var action = (e.parameter && e.parameter.action) || 'loadAll';
-  if (action === 'loadAll') {
-    return jsonResponse_({
-      ok: true,
-      transactions: readCollection_('Transactions'),
-      inventory: readCollection_('Inventory'),
-      invoices: readCollection_('Invoices'),
-      receipts: readCollection_('Receipts'),
-      settings: readSettings_()
-    });
+  try {
+    var action = (e.parameter && e.parameter.action) || 'loadAll';
+    if (action === 'loadAll') {
+      return jsonResponse_({
+        ok: true,
+        transactions: readCollection_('Transactions'),
+        inventory: readCollection_('Inventory'),
+        invoices: readCollection_('Invoices'),
+        receipts: readCollection_('Receipts'),
+        settings: readSettings_()
+      });
+    }
+    return jsonResponse_({ ok: false, error: 'unknown action: ' + action });
+  } catch (err) {
+    return jsonResponse_({ ok: false, error: String(err) });
   }
-  return jsonResponse_({ ok: false, error: 'unknown action' });
+}
+
+// Diagnostic helper: select this function in the dropdown next to "Run" in the
+// Apps Script editor, click Run, then View > Logs (or Execution log) to see
+// exactly what loadAll returns, without needing the deployed URL or a browser.
+function testLoadAll() {
+  var result = doGet({ parameter: { action: 'loadAll' } }).getContent();
+  Logger.log(result);
 }
 
 function doPost(e) {
