@@ -7,6 +7,7 @@
 // Copy the resulting /exec URL and send it back so the frontend can be wired up.
 
 var FOLDER_ID = '1fACSjyzIjhUUEh-8cS7sDwThv34hPliq'; // Drive folder for photos
+var SPREADSHEET_ID = '1-7LvGF-YykwFllEjyj1HscK2cxQ-Gr6VCcQoEsknscg'; // FrameLedger Data sheet
 
 var COLLECTION_SHEETS = {
   transactions: 'Transactions',
@@ -23,7 +24,11 @@ var SCHEMAS = {
 };
 
 function getSheet_(name) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // openById (matching the older, proven-working Camera Flip Backend) instead
+  // of getActiveSpreadsheet() — the latter is meant for scripts running
+  // interactively inside the Sheets UI and can behave unreliably when the
+  // script is only ever invoked over HTTP as a Web App, which is our case.
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sh = ss.getSheetByName(name);
   if (!sh) sh = ss.insertSheet(name);
   return sh;
