@@ -136,15 +136,23 @@ function testLoadAll() {
 
 function doPost(e) {
   try {
-    var body = JSON.parse(e.postData.contents);
-    var action = body.action;
+    // Same wire format as the older working Camera Flip Backend: action in
+    // the query string, a single 'payload' form field carrying the JSON.
+    // This avoids relying on a raw JSON request body, which is more prone
+    // to being mangled/blocked between a static GitHub Pages site and a
+    // script.google.com Web App than a plain form POST is.
+    var action = e.parameter.action;
+    var payload = {};
+    if (e.parameter.payload) {
+      payload = JSON.parse(e.parameter.payload);
+    }
 
     if (action === 'save') {
-      var key = body.key;
+      var key = payload.key;
       if (key === 'settings') {
-        writeSettings_(body.data || {});
+        writeSettings_(payload.data || {});
       } else if (COLLECTION_SHEETS[key]) {
-        writeCollection_(COLLECTION_SHEETS[key], body.data || []);
+        writeCollection_(COLLECTION_SHEETS[key], payload.data || []);
       } else {
         return jsonResponse_({ ok: false, error: 'unknown key: ' + key });
       }
@@ -153,8 +161,8 @@ function doPost(e) {
 
     if (action === 'uploadImage') {
       var folder = DriveApp.getFolderById(FOLDER_ID);
-      var bytes = Utilities.base64Decode(body.base64);
-      var blob = Utilities.newBlob(bytes, body.mimeType || 'image/jpeg', body.filename || ('img-' + Date.now() + '.jpg'));
+      var bytes = Utilities.base64Decode(payload.base64);
+      var blob = Utilities.newBlob(bytes, payload.mimeType || 'image/jpeg', payload.filename || ('img-' + Date.now() + '.jpg'));
       var file = folder.createFile(blob);
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       var url = 'https://drive.google.com/uc?export=view&id=' + file.getId();
