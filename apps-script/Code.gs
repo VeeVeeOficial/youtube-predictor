@@ -6,8 +6,16 @@
 //   Who has access: Anyone
 // Copy the resulting /exec URL and send it back so the frontend can be wired up.
 
-var FOLDER_ID = '1fACSjyzIjhUUEh-8cS7sDwThv34hPliq'; // Drive folder for photos
 var SPREADSHEET_ID = '1-7LvGF-YykwFllEjyj1HscK2cxQ-Gr6VCcQoEsknscg'; // FrameLedger Data sheet
+
+// Slips get routed to different Drive folders depending on what they
+// document, chosen by the frontend via the 'folderKey' upload param.
+var FOLDER_MAP = {
+  general: '1fACSjyzIjhUUEh-8cS7sDwThv34hPliq',  // camera/lens purchase evidence (default)
+  income: '19DVWk9e3aDApM0g2qg2lPeWHRHjv7XKe',   // payment slips from customers (sales, invoices)
+  shipping: '170mJWu_8hZD7j7fJ5kPgnnksnkPfanQ4',  // shipping cost slips (ค่าจัดส่ง)
+  parts: '1QHJM-vfiWCLj-boR9Ldm7FYHUuUmQVBM'      // parts/software purchase slips (อะไหล่)
+};
 
 var COLLECTION_SHEETS = {
   transactions: 'Transactions',
@@ -19,7 +27,7 @@ var COLLECTION_SHEETS = {
 var SCHEMAS = {
   Transactions: ['id', 'type', 'vendor', 'amount', 'date', 'category', 'note', 'linkedItemId'],
   Inventory: ['id', 'name', 'sn', 'productCode', 'condition', 'supplier', 'purchaseCost', 'dateIn', 'status', 'salePrice', 'saleDate', 'customer', 'saleSlip', 'evidencePhoto'],
-  Invoices: ['id', 'invNo', 'itemName', 'sn', 'productCode', 'customer', 'price', 'date', 'cost', 'profit'],
+  Invoices: ['id', 'invNo', 'itemName', 'sn', 'productCode', 'customer', 'price', 'shipping', 'date', 'cost', 'profit', 'incomeTxId', 'shippingTxId'],
   Receipts: ['id', 'recNo', 'desc', 'amount', 'shipping', 'total', 'date']
 };
 
@@ -35,10 +43,20 @@ function getSheet_(name) {
 }
 
 function ensureHeaders_(sheet, headers) {
-  var range = sheet.getRange(1, 1, 1, headers.length);
-  var existing = range.getValues()[0];
-  if (existing.join('') === '') {
-    range.setValues([headers]);
+  // Self-healing: also fixes up a sheet that already has rows but is
+  // missing newly-added columns (e.g. after a schema change), not just
+  // a brand-new empty sheet — otherwise new columns never get a header
+  // label on sheets that already had data before the schema changed.
+  var lastCol = sheet.getLastColumn();
+  var existing = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  var matches = existing.length >= headers.length;
+  if (matches) {
+    for (var i = 0; i < headers.length; i++) {
+      if (existing[i] !== headers[i]) { matches = false; break; }
+    }
+  }
+  if (!matches) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   }
 }
 
@@ -182,7 +200,8 @@ function doPost(e) {
     }
 
     if (action === 'uploadImage') {
-      var folder = DriveApp.getFolderById(FOLDER_ID);
+      var folderId = FOLDER_MAP[payload.folderKey] || FOLDER_MAP.general;
+      var folder = DriveApp.getFolderById(folderId);
       var bytes = Utilities.base64Decode(payload.base64);
       var blob = Utilities.newBlob(bytes, payload.mimeType || 'image/jpeg', payload.filename || ('img-' + Date.now() + '.jpg'));
       var file = folder.createFile(blob);

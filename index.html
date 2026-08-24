@@ -204,13 +204,14 @@
       <div class="field"><label>ชื่อลูกค้า</label><input id="invCustomer" placeholder="ชื่อลูกค้า"></div>
       <div class="field field-row">
         <div class="field"><label>ราคาขาย (บาท)</label><input type="number" id="invPrice" placeholder="0"></div>
-        <div class="field"><label>วันที่</label><input type="date" id="invDate"></div>
+        <div class="field"><label>ค่าจัดส่ง (บาท)</label><input type="number" id="invShipping" placeholder="0" value="0"></div>
       </div>
+      <div class="field"><label>วันที่</label><input type="date" id="invDate"></div>
       <div class="field">
-        <label>แนบสลิปโอนเงินจากลูกค้า (ไม่บังคับ)</label>
-        <input type="file" accept="image/*" id="invSlipInput" onchange="handleInvSlip(event)">
+        <label>แนบสลิปโอนเงินจากลูกค้า (ไม่บังคับ แนบได้หลายรูป)</label>
+        <input type="file" accept="image/*" id="invSlipInput" multiple onchange="handleInvSlip(event)">
       </div>
-      <img id="invSlipThumb" class="thumb" style="display:none;max-height:120px;">
+      <div id="invSlipThumbs" class="thumb-row"></div>
       <button class="btn primary" onclick="generateInvoice()">สร้างบิล + บันทึกรายรับ</button>
     </div>
     <div id="invoicePreview"></div>
@@ -418,7 +419,6 @@ let settings = { taxRate: 5, costMode:'detailed', claudeApiKey:'', claudeModel:'
 let currentTxType = 'income';
 let pendingImageBase64 = null;   // for AI scan (raw base64, no data: prefix)
 let pendingImageDataUrl = null;  // compressed data URL to attach to stock item
-let invSlipDataUrl = null;
 let soldSlipDataUrl = null;
 let invEvidenceDataUrl = null;
 let existingEvidenceDataUrl = null;
@@ -612,14 +612,27 @@ const saveReceipts=()=>persist('receipts',receipts);
 const saveSettings=()=>persist('settings',settings);
 
 // ---------- Image upload (Drive, via Apps Script) ----------
+// Slips get routed to different Drive folders by what they document —
+// folderKey must match a key in FOLDER_MAP on the Apps Script side.
+//   general  — camera/lens purchase evidence (default)
+//   income   — payment slips from customers (sales, invoices)
+//   shipping — shipping cost slips (ค่าจัดส่ง)
+//   parts    — parts/software purchase slips (อะไหล่)
+function categoryToFolderKey(category){
+  if(category === 'ขายกล้อง/เลนส์') return 'income';
+  if(category === 'ค่าจัดส่ง') return 'shipping';
+  if(category === 'อะไหล่') return 'parts';
+  return 'general';
+}
+
 let pendingUploads = {};
-async function uploadImageToDrive(dataUrl, prefix){
+async function uploadImageToDrive(dataUrl, prefix, folderKey){
   try{
     const [header, base64] = dataUrl.split(',');
     const mimeMatch = header.match(/data:(.*?);base64/);
     const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
     const filename = (prefix||'img') + '-' + Date.now() + '.jpg';
-    const data = await apiPost('uploadImage', { base64, mimeType, filename });
+    const data = await apiPost('uploadImage', { base64, mimeType, filename, folderKey: folderKey || 'general' });
     if(data && data.ok) return data.url;
     throw new Error((data && data.error) || 'upload failed');
   }catch(e){
@@ -628,8 +641,8 @@ async function uploadImageToDrive(dataUrl, prefix){
     return null;
   }
 }
-function startImageUpload(name, dataUrl, prefix){
-  pendingUploads[name] = uploadImageToDrive(dataUrl, prefix);
+function startImageUpload(name, dataUrl, prefix, folderKey){
+  pendingUploads[name] = uploadImageToDrive(dataUrl, prefix, folderKey);
 }
 async function resolveImageUpload(name){
   const p = pendingUploads[name];
@@ -753,7 +766,9 @@ function handleFileUpload(e){
     pendingImageBase64 = dataUrl.split(',')[1];
     document.getElementById('receiptThumb').src = dataUrl;
     document.getElementById('receiptThumb').style.display='block';
-    startImageUpload('receipt', dataUrl, 'receipt');
+    // Uploaded at save time (not here) — the category (which decides the
+    // destination Drive folder) can still change via the AI scan below or
+    // the dropdown, and isn't final until saveTransaction() runs.
     await scanReceipt(pendingImageBase64, 'image/jpeg');
   }).catch(()=>showToast('ประมวลผลรูปไม่สำเร็จ ลองใหม่อีกครั้ง'));
 }
@@ -826,7 +841,9 @@ async function saveTransaction(){
     let qty = parseInt(document.getElementById('stkQty').value)||1; if(qty<1) qty=1;
     const perUnitCost = amount / qty;
     const rows = document.querySelectorAll('#snRowsWrap .snrow');
-    const evidencePhotoUrl = await resolveImageUpload('receipt');
+    const evidencePhotoUrl = pendingImageDataUrl
+      ? await uploadImageToDrive(pendingImageDataUrl, 'receipt', categoryToFolderKey(tx.category))
+      : null;
     for(let i=0;i<qty;i++){
       const row = rows[i];
       const sn = row ? row.querySelector('[data-role="sn"]').value.trim() : '';
@@ -906,7 +923,7 @@ function handleSoldSlip(e){
     soldSlipDataUrl = dataUrl;
     document.getElementById('sSlipThumb').src = dataUrl;
     document.getElementById('sSlipThumb').style.display='block';
-    startImageUpload('soldSlip', dataUrl, 'sale-slip');
+    startImageUpload('soldSlip', dataUrl, 'sale-slip', 'income');
   });
 }
 function openSoldModal(itemId){
@@ -947,6 +964,13 @@ async function deleteTx(txId){
 }
 function viewSlip(url){ document.getElementById('slipViewImg').src=url; document.getElementById('slipViewBackdrop').classList.add('open'); }
 function closeSlipView(e){ if(e.target.id==='slipViewBackdrop') document.getElementById('slipViewBackdrop').classList.remove('open'); }
+// saleSlip/evidencePhoto may hold multiple URLs joined by ',' (multi-photo attach)
+function slipThumbsHtml(urls, title){
+  if(!urls) return '';
+  return urls.split(',').filter(Boolean).map(u =>
+    `<img src="${u}" class="slip-thumb" onclick="viewSlip('${u}')" title="${title}">`
+  ).join('');
+}
 
 function openEvidModal(itemId){
   evidTargetId = itemId; existingEvidenceDataUrl = null; pendingUploads.existingEvidence = null;
@@ -981,36 +1005,54 @@ function populateInvoiceItemSelect(){
   document.getElementById('invDate').value = todayStr();
   renderInvoiceHistory();
 }
+let invSlipUploadPromises = [];
 function handleInvSlip(e){
-  const file=e.target.files[0]; if(!file) return;
-  compressImage(file,900,0.6).then(dataUrl=>{
-    invSlipDataUrl = dataUrl;
-    document.getElementById('invSlipThumb').src = dataUrl;
-    document.getElementById('invSlipThumb').style.display='block';
-    startImageUpload('invSlip', dataUrl, 'sale-slip');
+  const files = Array.from(e.target.files || []);
+  if(!files.length) return;
+  const thumbsWrap = document.getElementById('invSlipThumbs');
+  files.forEach(file => {
+    compressImage(file,900,0.6).then(dataUrl=>{
+      const img = document.createElement('img');
+      img.src = dataUrl; img.className = 'slip-thumb';
+      img.onclick = () => viewSlip(dataUrl);
+      thumbsWrap.appendChild(img);
+      // sale slips are payment received from the customer — always income
+      invSlipUploadPromises.push(uploadImageToDrive(dataUrl, 'sale-slip', 'income'));
+    });
   });
 }
 async function generateInvoice(){
   const itemId = document.getElementById('invItemSelect').value;
   const item = inventory.find(i=>i.id===itemId);
   const price = parseFloat(document.getElementById('invPrice').value);
+  const shipping = parseFloat(document.getElementById('invShipping').value) || 0;
   const customer = document.getElementById('invCustomer').value || '-';
   const date = document.getElementById('invDate').value || todayStr();
   if(!item){ alert('เลือกกล้องที่จะขายก่อน'); return; }
   if(!price || price<=0){ alert('กรอกราคาขาย'); return; }
 
+  // Shipping cost is a linked expense on the item — itemCostBreakdown()
+  // already sums linked expenses into the item's total cost (same pattern
+  // repairs use), so this alone makes it reduce the invoice's profit below.
+  let shippingTxId = null;
+  if(shipping > 0){
+    shippingTxId = uid();
+    transactions.unshift({ id:shippingTxId, type:'expense', vendor:'ค่าจัดส่ง', amount:shipping, date, category:'ค่าจัดส่ง', note:`ค่าส่ง ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id });
+  }
   const {total:cost} = itemCostBreakdown(item.id);
-  const saleSlipUrl = await resolveImageUpload('invSlip');
-  item.status='sold'; item.salePrice=price; item.customer=customer; item.saleDate=date; item.saleSlip=saleSlipUrl;
-  transactions.unshift({ id:uid(), type:'income', vendor:customer, amount:price, date, category:'ขายกล้อง/เลนส์', note:`ขาย ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id });
+  const saleSlipUrls = (await Promise.all(invSlipUploadPromises)).filter(Boolean);
+  item.status='sold'; item.salePrice=price; item.customer=customer; item.saleDate=date; item.saleSlip=saleSlipUrls.join(',');
+  const incomeTxId = uid();
+  transactions.unshift({ id:incomeTxId, type:'income', vendor:customer, amount:price, date, category:'ขายกล้อง/เลนส์', note:`ขาย ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id });
   const invNo = 'INV-' + (invoices.length+1).toString().padStart(4,'0');
-  const inv = { id:uid(), invNo, itemName:item.name, sn:item.sn, productCode:item.productCode, customer, price, date, cost, profit: price-cost };
+  const inv = { id:uid(), invNo, itemName:item.name, sn:item.sn, productCode:item.productCode, customer, price, shipping, date, cost, profit: price-cost, incomeTxId, shippingTxId };
   invoices.unshift(inv);
   await saveInventory(); await saveTransactions(); await saveInvoices();
   renderInvoicePreview(inv);
   populateInvoiceItemSelect();
   document.getElementById('invPrice').value=''; document.getElementById('invCustomer').value='';
-  document.getElementById('invSlipThumb').style.display='none'; invSlipDataUrl=null;
+  document.getElementById('invShipping').value='0';
+  document.getElementById('invSlipThumbs').innerHTML=''; invSlipUploadPromises=[];
   renderAll();
 }
 function renderInvoicePreview(inv){
@@ -1028,10 +1070,11 @@ function renderInvoicePreview(inv){
       <div class="irow"><span>ลูกค้า</span><b>${inv.customer}</b></div>
       <div class="irow"><span>สินค้า</span><b>${inv.itemName}</b></div>
       <div class="irow"><span>รหัสสินค้า / SN</span><b>${inv.productCode||'-'} / ${inv.sn||'-'}</b></div>
+      ${inv.shipping?`<div class="irow"><span>ค่าจัดส่ง</span><b>${fmt(inv.shipping)}</b></div>`:''}
       <div class="itotal"><span>ยอดรวม</span><span>${fmt(inv.price)}</span></div>
       <div class="words">(${bahtText(inv.price)})</div>
       <div class="cost-box">
-        <div class="r"><span>ต้นทุนสินค้ารวม</span><span>${fmt(inv.cost)}</span></div>
+        <div class="r"><span>ต้นทุนสินค้ารวม${inv.shipping?' (รวมค่าจัดส่ง)':''}</span><span>${fmt(inv.cost)}</span></div>
         <div class="r p"><span>กำไรสุทธิรายการนี้</span><span>${fmt(inv.profit)}</span></div>
       </div>
       <div class="sig"><div>ผู้รับเงิน</div><div>ลูกค้า</div></div>
@@ -1042,9 +1085,21 @@ function renderInvoiceHistory(){
   if(!invoices.length){ el.innerHTML='<div class="empty">ยังไม่มีบิลที่ออก</div>'; return; }
   el.innerHTML = invoices.map(inv=>`
     <div class="tx">
-      <div class="l"><div class="name">${inv.invNo} — ${inv.itemName}</div><div class="meta">${inv.customer} · ${inv.date} · กำไร ${fmt(inv.profit)}</div></div>
-      <div class="amt income">${fmt(inv.price)}</div>
+      <div class="l"><div class="name">${inv.invNo} — ${inv.itemName}</div><div class="meta">${inv.customer} · ${inv.date} · กำไร ${fmt(inv.profit)}${inv.shipping?' · ค่าส่ง '+fmt(inv.shipping):''}</div></div>
+      <div style="text-align:right;">
+        <div class="amt income">${fmt(inv.price)}</div>
+        <div onclick="deleteInvoice('${inv.id}')" style="font-size:10px;color:var(--dim);cursor:pointer;margin-top:3px;">ลบ</div>
+      </div>
     </div>`).join('');
+}
+async function deleteInvoice(invId){
+  const inv = invoices.find(i=>i.id===invId);
+  if(!inv) return;
+  if(!confirm(`ลบบิล ${inv.invNo}? รายการรายรับ (และค่าจัดส่งถ้ามี) ที่ผูกกับบิลนี้จะถูกลบด้วย — สถานะสินค้าจะไม่เปลี่ยน (ใช้ "ยกเลิกการขาย" ในหน้าคลังกล้องถ้าต้องการคืนเป็นสต็อก)`)) return;
+  invoices = invoices.filter(i=>i.id!==invId);
+  transactions = transactions.filter(t => t.id!==inv.incomeTxId && t.id!==inv.shippingTxId);
+  await saveInvoices(); await saveTransactions();
+  renderInvoiceHistory(); renderAll();
 }
 
 // ---------- Substitute receipt ----------
@@ -1191,8 +1246,8 @@ function renderInventory(){
             <div class="profit-line"><span>กำไร</span><span>${fmt(profit)}</span></div>
           `:''}
           <div class="thumb-row">
-            ${item.evidencePhoto?`<img src="${item.evidencePhoto}" class="slip-thumb" onclick="viewSlip('${item.evidencePhoto}')" title="หลักฐานการซื้อ">`:''}
-            ${item.saleSlip?`<img src="${item.saleSlip}" class="slip-thumb" onclick="viewSlip('${item.saleSlip}')" title="สลิปขาย">`:''}
+            ${slipThumbsHtml(item.evidencePhoto, 'หลักฐานการซื้อ')}
+            ${slipThumbsHtml(item.saleSlip, 'สลิปขาย')}
           </div>
         </div>
         <div class="row-btns" style="margin-top:10px;">
