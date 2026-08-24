@@ -541,12 +541,23 @@ async function loadAll(){
   renderAll();
 }
 async function persist(key,val){
-  try{
-    if(key === 'settings'){
-      await apiSave('settings', { taxRate: val.taxRate, costMode: val.costMode, profile: val.profile });
+  if(key === 'settings'){
+    // Save the API key/model locally FIRST, independent of whether the
+    // remote Sheet sync below succeeds — it's a per-device secret and must
+    // never be lost just because the network/Sheet had a hiccup.
+    try{
       localStorage.setItem(STORAGE_PREFIX+'local', JSON.stringify({ claudeApiKey: val.claudeApiKey||'', claudeModel: val.claudeModel||'claude-sonnet-5' }));
+    }catch(e){ console.error('local settings save failed', e); }
+    try{
+      await apiSave('settings', { taxRate: val.taxRate, costMode: val.costMode, profile: val.profile });
       return true;
+    }catch(e){
+      console.error('storage failed for settings', e);
+      if(!storageWarned){ storageWarned=true; showToast('⚠ บันทึกขึ้นเซิร์ฟเวอร์ไม่สำเร็จ — เช็คอินเทอร์เน็ต ข้อมูลยังใช้งานได้ในเซสชันนี้ — ลองกด ⬇ JSON เพื่อสำรองไว้', 5000); }
+      return false;
     }
+  }
+  try{
     await apiSave(key, val);
     return true;
   }catch(e){
