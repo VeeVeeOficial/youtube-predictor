@@ -112,22 +112,39 @@ function jsonResponse_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
+// GET responses from an Apps Script Web App are served through a redirect to
+// script.googleusercontent.com for caching, and that redirected response
+// doesn't carry CORS headers a cross-origin fetch() can read — confirmed by
+// opening the /exec URL directly (works, shows correct JSON) vs. the site's
+// own fetch() call (always fails). A <script> tag isn't subject to CORS at
+// all, so when a 'callback' param is present, wrap the JSON as a JS function
+// call the frontend can load via a script tag instead of fetch().
+function respond_(obj, callbackName) {
+  if (callbackName) {
+    return ContentService
+      .createTextOutput(callbackName + '(' + JSON.stringify(obj) + ');')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return jsonResponse_(obj);
+}
+
 function doGet(e) {
+  var callbackName = e && e.parameter && e.parameter.callback;
   try {
     var action = (e.parameter && e.parameter.action) || 'loadAll';
     if (action === 'loadAll') {
-      return jsonResponse_({
+      return respond_({
         ok: true,
         transactions: readCollection_('Transactions'),
         inventory: readCollection_('Inventory'),
         invoices: readCollection_('Invoices'),
         receipts: readCollection_('Receipts'),
         settings: readSettings_()
-      });
+      }, callbackName);
     }
-    return jsonResponse_({ ok: false, error: 'unknown action: ' + action });
+    return respond_({ ok: false, error: 'unknown action: ' + action }, callbackName);
   } catch (err) {
-    return jsonResponse_({ ok: false, error: String(err) });
+    return respond_({ ok: false, error: String(err) }, callbackName);
   }
 }
 
