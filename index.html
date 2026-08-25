@@ -494,6 +494,22 @@ const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbyOmAnnM4oRLkm7Ck_
 const STORAGE_PREFIX = 'frameledger_';
 let storageWarned = false;
 
+// The Claude API key is deliberately local-only (never synced to the shared
+// Sheet), so unlike everything else it has no server copy to self-heal from
+// if the browser's site data gets partially cleared. Back it up in a cookie
+// too — a second, independent local store — so losing one doesn't lose both.
+function setLocalCookie_(name, value, days){
+  try{
+    document.cookie = name + '=' + encodeURIComponent(value) + '; max-age=' + (days*24*60*60) + '; path=/; SameSite=Lax';
+  }catch(e){}
+}
+function getLocalCookie_(name){
+  try{
+    const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : null;
+  }catch(e){ return null; }
+}
+
 async function apiPost(action, payload){
   const url = new URL(API_BASE_URL);
   url.searchParams.set('action', action);
@@ -561,13 +577,18 @@ async function loadAll(){
     console.error('loadAll failed', e);
     showToast('⚠ โหลดข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วลองรีเฟรชหน้าใหม่', 5000);
   }
-  // Claude API key/model stay local-only (never synced to the shared Sheet)
+  // Claude API key/model stay local-only (never synced to the shared Sheet).
+  // Check localStorage first, fall back to the cookie backup if that's
+  // empty, and re-sync both so either one being cleared doesn't lose it.
   try{
-    const localRaw = localStorage.getItem(STORAGE_PREFIX+'local');
+    let localRaw = localStorage.getItem(STORAGE_PREFIX+'local');
+    if(!localRaw) localRaw = getLocalCookie_(STORAGE_PREFIX+'local');
     if(localRaw){
       const local = JSON.parse(localRaw);
       settings.claudeApiKey = local.claudeApiKey || '';
       settings.claudeModel = local.claudeModel || 'claude-sonnet-5';
+      try{ localStorage.setItem(STORAGE_PREFIX+'local', localRaw); }catch(e){}
+      setLocalCookie_(STORAGE_PREFIX+'local', localRaw, 365);
     }
   }catch(e){}
   if(!settings.profile) settings.profile={shopName:'',ownerName:'',address:'',phone:'',taxId:''};
@@ -585,7 +606,9 @@ async function persist(key,val){
     // remote Sheet sync below succeeds — it's a per-device secret and must
     // never be lost just because the network/Sheet had a hiccup.
     try{
-      localStorage.setItem(STORAGE_PREFIX+'local', JSON.stringify({ claudeApiKey: val.claudeApiKey||'', claudeModel: val.claudeModel||'claude-sonnet-5' }));
+      const localPayload = JSON.stringify({ claudeApiKey: val.claudeApiKey||'', claudeModel: val.claudeModel||'claude-sonnet-5' });
+      localStorage.setItem(STORAGE_PREFIX+'local', localPayload);
+      setLocalCookie_(STORAGE_PREFIX+'local', localPayload, 365);
     }catch(e){ console.error('local settings save failed', e); }
     try{
       await apiSave('settings', { taxRate: val.taxRate, costMode: val.costMode, profile: val.profile });
