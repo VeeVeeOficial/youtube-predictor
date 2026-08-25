@@ -191,6 +191,11 @@
 
   <div class="view" id="view-inventory">
     <div class="segmented2">
+      <button class="on" id="stockFilterAvailable" onclick="setStockFilter('stock')">ในคลัง</button>
+      <button id="stockFilterSold" onclick="setStockFilter('sold')">ขายแล้ว</button>
+      <button id="stockFilterAll" onclick="setStockFilter('all')">ทั้งหมด</button>
+    </div>
+    <div class="segmented2">
       <button class="on" id="costModeDetailed" onclick="setCostMode('detailed')">ดูต้นทุนรายตัว</button>
       <button id="costModeLump" onclick="setCostMode('lump')">ดูภาพรวมอย่างเดียว</button>
     </div>
@@ -695,6 +700,15 @@ function setCostMode(mode, silent){
   document.getElementById('costModeDetailed').classList.toggle('on', mode==='detailed');
   document.getElementById('costModeLump').classList.toggle('on', mode==='lump');
   if(!silent){ saveSettings(); renderInventory(); }
+}
+
+let stockFilter = 'stock';
+function setStockFilter(filter){
+  stockFilter = filter;
+  document.getElementById('stockFilterAvailable').classList.toggle('on', filter==='stock');
+  document.getElementById('stockFilterSold').classList.toggle('on', filter==='sold');
+  document.getElementById('stockFilterAll').classList.toggle('on', filter==='all');
+  renderInventory();
 }
 
 // ---------- Profile ----------
@@ -1237,14 +1251,16 @@ function txRowHtml(t){
 function renderInventory(){
   const wrap = document.getElementById('invList');
   const lump = settings.costMode==='lump';
+  const filtered = stockFilter==='all' ? inventory : inventory.filter(it => it.status===stockFilter);
+  const filterLabel = stockFilter==='stock' ? 'ในคลัง' : stockFilter==='sold' ? 'ขายแล้ว' : 'ทั้งหมด';
   let html = `<div class="card" style="display:flex;align-items:center;justify-content:space-between;">
-      <div><h3 style="margin:0;">คลังกล้อง/เลนส์</h3><div style="font-size:11px;color:var(--dim);margin-top:2px;">${inventory.length} รายการ</div></div>
+      <div><h3 style="margin:0;">คลังกล้อง/เลนส์</h3><div style="font-size:11px;color:var(--dim);margin-top:2px;">${filtered.length} รายการ (${filterLabel}) จากทั้งหมด ${inventory.length} รายการ</div></div>
       <button class="btn primary small" onclick="openInvModal()">+ เพิ่มกล้อง</button>
     </div>`;
-  if(!inventory.length){
-    html += '<div class="empty"><div class="big">📷</div>ยังไม่มีกล้องในคลัง</div>';
+  if(!filtered.length){
+    html += `<div class="empty"><div class="big">📷</div>ไม่มีรายการใน "${filterLabel}"</div>`;
   } else {
-    inventory.forEach(item=>{
+    filtered.forEach(item=>{
       const {linked,total} = itemCostBreakdown(item.id);
       const profit = item.status==='sold' ? (item.salePrice-total) : null;
       html += `<div class="item-card">
