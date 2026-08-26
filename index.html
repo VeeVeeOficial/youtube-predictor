@@ -567,6 +567,7 @@ function apiGetJsonp(params){
 }
 
 let initialLoadDone = false;
+let initialLoadFailed = false;
 async function loadAll(){
   try{
     const data = await apiGetJsonp({ action: 'loadAll', t: Date.now() });
@@ -593,6 +594,7 @@ async function loadAll(){
     }
   }catch(e){
     console.error('loadAll failed', e);
+    initialLoadFailed = true;
     showToast('⚠ โหลดข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วลองรีเฟรชหน้าใหม่', 5000);
   }
   // Fallback if the remote Sheet had no key yet (e.g. load failed, or a
@@ -621,6 +623,15 @@ async function loadAll(){
 }
 async function persist(key,val){
   if(key === 'settings'){
+    // Never push a settings save to the Sheet if the initial load never
+    // actually succeeded — the in-memory settings object would still be
+    // blank defaults, and writing that would overwrite real, previously
+    // saved shop profile/API key data with blanks.
+    if(initialLoadFailed || !initialLoadDone){
+      console.error('Refused to save settings: initial load has not succeeded yet');
+      showToast('⚠ ยังโหลดข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ — ไม่บันทึกตอนนี้เพื่อป้องกันข้อมูลเดิมหาย ลองรีเฟรชหน้าใหม่แล้วเช็คอินเทอร์เน็ตก่อน', 6000);
+      return false;
+    }
     // Cache the API key/model locally too, independent of whether the
     // remote Sheet sync below succeeds, so it's still available offline —
     // but the Sheet is now the source of truth (synced across devices).
