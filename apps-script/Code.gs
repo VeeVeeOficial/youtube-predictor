@@ -8,6 +8,13 @@
 
 var SPREADSHEET_ID = '1-7LvGF-YykwFllEjyj1HscK2cxQ-Gr6VCcQoEsknscg'; // FrameLedger Data sheet
 
+// Bump this every time Code.gs changes, and check it after each redeploy —
+// the deployed /exec URL freezes whatever code was live when you last
+// deployed "New version", so this is the only reliable way to confirm a
+// redeploy actually took effect (the Apps Script editor's "last saved" time
+// does NOT mean the public URL is running that code yet).
+var BACKEND_VERSION = 4;
+
 // Slips get routed to different Drive folders depending on what they
 // document, chosen by the frontend via the 'folderKey' upload param.
 var FOLDER_MAP = {
@@ -25,7 +32,7 @@ var COLLECTION_SHEETS = {
 };
 
 var SCHEMAS = {
-  Transactions: ['id', 'type', 'vendor', 'amount', 'date', 'category', 'note', 'linkedItemId'],
+  Transactions: ['id', 'type', 'vendor', 'amount', 'date', 'category', 'note', 'linkedItemId', 'evidencePhotos'],
   Inventory: ['id', 'name', 'sn', 'productCode', 'condition', 'supplier', 'purchaseCost', 'dateIn', 'status', 'salePrice', 'saleDate', 'customer', 'saleSlip', 'evidencePhoto'],
   Invoices: ['id', 'invNo', 'itemName', 'sn', 'productCode', 'customer', 'price', 'shipping', 'date', 'cost', 'profit', 'incomeTxId', 'shippingTxId'],
   Receipts: ['id', 'recNo', 'desc', 'amount', 'shipping', 'total', 'date']
@@ -157,6 +164,7 @@ function doGet(e) {
     if (action === 'loadAll') {
       return respond_({
         ok: true,
+        backendVersion: BACKEND_VERSION,
         transactions: readCollection_('Transactions'),
         inventory: readCollection_('Inventory'),
         invoices: readCollection_('Invoices'),

@@ -243,6 +243,7 @@
       <label>Claude API Key (สำหรับสลิป AI)</label>
       <input type="password" id="pApiKey" placeholder="sk-ant-...">
       <div class="hint">คีย์นี้จะถูกซิงก์เก็บไว้ใน Google Sheet ของร้าน (เพื่อให้ใช้ได้ทุกเครื่อง/มือถือโดยไม่ต้องกรอกใหม่) และถูกส่งตรงไปยัง Anthropic API เพื่ออ่านสลิปเท่านั้น — ผู้ที่เข้าถึง Sheet นี้ได้จะเห็นคีย์นี้ได้ด้วย</div>
+      <div class="hint" id="backendVersionHint" style="margin-top:4px;">เวอร์ชันเซิร์ฟเวอร์ (Apps Script): <span id="backendVersionText">-</span></div>
     </div>
     <div class="row-btns" style="margin-top:6px;">
       <button class="btn ghost" onclick="closeProfileModal()">ปิด</button>
@@ -257,11 +258,11 @@
     <div class="modal-handle"></div>
     <h2>เพิ่มรายรับ / รายจ่าย</h2>
     <div class="upload" id="uploadZone" onclick="document.getElementById('fileInput').click()">
-      <div class="ic">📎</div><div class="t1">แนบรูปสลิป / บิล / ใบเสร็จ</div>
-      <div class="t2">AI จะอ่านยอดเงิน วันที่ และประเภทให้อัตโนมัติ</div>
+      <div class="ic">📎</div><div class="t1">แนบรูปสลิป / บิล / ใบเสร็จ (เลือกได้สูงสุด 10 รูป)</div>
+      <div class="t2">AI จะอ่านยอดเงิน วันที่ และประเภทให้อัตโนมัติจากรูปแรก</div>
     </div>
-    <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFileUpload(event)">
-    <img id="receiptThumb" class="thumb" style="display:none">
+    <input type="file" id="fileInput" accept="image/*" multiple style="display:none" onchange="handleFileUpload(event)">
+    <div id="receiptThumbs" class="thumb-row" style="display:none"></div>
     <div class="scan-status" id="scanStatus" style="display:none"><div class="dot-anim"></div><span id="scanStatusText">AI กำลังอ่านสลิป...</span></div>
 
     <div class="segmented" style="margin:12px 0;">
@@ -422,8 +423,7 @@ let invoices = [];
 let receipts = [];
 let settings = { taxRate: 5, costMode:'detailed', claudeApiKey:'', claudeModel:'claude-sonnet-5', profile: { shopName:'', ownerName:'', address:'', phone:'', taxId:'' } };
 let currentTxType = 'income';
-let pendingImageBase64 = null;   // for AI scan (raw base64, no data: prefix)
-let pendingImageDataUrl = null;  // compressed data URL to attach to stock item
+let pendingReceipts = []; // [{dataUrl, base64}] photos attached to the current income/expense entry
 let soldSlipDataUrl = null;
 let invEvidenceDataUrl = null;
 let existingEvidenceDataUrl = null;
@@ -568,10 +568,12 @@ function apiGetJsonp(params){
 
 let initialLoadDone = false;
 let initialLoadFailed = false;
+let backendVersion = null; // reported by Code.gs loadAll — lets you confirm a redeploy actually took effect
 async function loadAll(){
   try{
     const data = await apiGetJsonp({ action: 'loadAll', t: Date.now() });
     if(!data || !data.ok) throw new Error((data && data.error) || 'load failed');
+    backendVersion = data.backendVersion != null ? data.backendVersion : null;
     transactions = data.transactions || [];
     inventory = data.inventory || [];
     invoices = data.invoices || [];
@@ -749,6 +751,7 @@ async function openProfileModal(){
   document.getElementById('pPhone').value = p.phone||'';
   document.getElementById('pTaxId').value = p.taxId||'';
   document.getElementById('pApiKey').value = settings.claudeApiKey||'';
+  document.getElementById('backendVersionText').textContent = backendVersion != null ? backendVersion : 'โหลดไม่สำเร็จ / เก่ามาก (ไม่มีเลขเวอร์ชัน)';
   document.getElementById('profileModalBackdrop').classList.add('open');
 }
 function closeProfileModal(){ document.getElementById('profileModalBackdrop').classList.remove('open'); }
@@ -779,9 +782,10 @@ function openAddModal(){
 }
 function closeAddModal(){
   document.getElementById('txModalBackdrop').classList.remove('open');
-  document.getElementById('receiptThumb').style.display='none';
+  const thumbsWrap = document.getElementById('receiptThumbs');
+  thumbsWrap.innerHTML=''; thumbsWrap.style.display='none';
   document.getElementById('scanStatus').style.display='none';
-  pendingImageBase64 = null; pendingImageDataUrl = null; pendingUploads.receipt = null;
+  pendingReceipts = [];
   ['fVendor','fAmount','fNote'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('fLinkItem').value='';
 }
@@ -826,16 +830,19 @@ function renderSNRows(){
 function updateStockAddPreview(){ /* amount changes just used at save time */ }
 
 function handleFileUpload(e){
-  const file = e.target.files[0]; if(!file) return;
-  compressImage(file, 900, 0.6).then(async dataUrl => {
-    pendingImageDataUrl = dataUrl;
-    pendingImageBase64 = dataUrl.split(',')[1];
-    document.getElementById('receiptThumb').src = dataUrl;
-    document.getElementById('receiptThumb').style.display='block';
+  const allFiles = Array.from(e.target.files || []);
+  if(!allFiles.length) return;
+  if(allFiles.length > 10) showToast('เลือกได้สูงสุด 10 รูปต่อครั้ง — ใช้ 10 รูปแรก', 4000);
+  const files = allFiles.slice(0, 10);
+  Promise.all(files.map(f => compressImage(f, 900, 0.6))).then(async dataUrls => {
+    pendingReceipts = dataUrls.map(dataUrl => ({ dataUrl, base64: dataUrl.split(',')[1] }));
+    const thumbsWrap = document.getElementById('receiptThumbs');
+    thumbsWrap.innerHTML = pendingReceipts.map(r => `<img src="${r.dataUrl}" class="slip-thumb" onclick="viewSlip('${r.dataUrl}')">`).join('');
+    thumbsWrap.style.display = pendingReceipts.length ? 'flex' : 'none';
     // Uploaded at save time (not here) — the category (which decides the
     // destination Drive folder) can still change via the AI scan below or
     // the dropdown, and isn't final until saveTransaction() runs.
-    await scanReceipt(pendingImageBase64, 'image/jpeg');
+    if(pendingReceipts.length) await scanReceipt(pendingReceipts[0].base64, 'image/jpeg');
   }).catch(()=>showToast('ประมวลผลรูปไม่สำเร็จ ลองใหม่อีกครั้ง'));
 }
 async function scanReceipt(base64, mediaType){
@@ -900,6 +907,10 @@ async function saveTransaction(){
     note: document.getElementById('fNote').value,
     linkedItemId: document.getElementById('fLinkItem').value || null
   };
+  const evidenceUrls = (await Promise.all(pendingReceipts.map(r =>
+    uploadImageToDrive(r.dataUrl, 'receipt', categoryToFolderKey(tx.category))
+  ))).filter(Boolean);
+  tx.evidencePhotos = evidenceUrls.join(',');
   transactions.unshift(tx);
 
   if(document.getElementById('addAsStock').checked && currentTxType==='expense'){
@@ -907,13 +918,14 @@ async function saveTransaction(){
     let qty = parseInt(document.getElementById('stkQty').value)||1; if(qty<1) qty=1;
     const perUnitCost = amount / qty;
     const rows = document.querySelectorAll('#snRowsWrap .snrow');
-    const evidencePhotoUrl = pendingImageDataUrl
-      ? await uploadImageToDrive(pendingImageDataUrl, 'receipt', categoryToFolderKey(tx.category))
-      : null;
     for(let i=0;i<qty;i++){
       const row = rows[i];
       const sn = row ? row.querySelector('[data-role="sn"]').value.trim() : '';
       const cond = row ? row.querySelector('[data-role="cond"]').value.trim() : '';
+      // One shared photo covers every item in the batch (old behavior);
+      // with multiple photos, match one-to-one by the order they were
+      // attached (e.g. photo of camera #1's receipt -> item #1).
+      const evidencePhoto = evidenceUrls.length === 1 ? evidenceUrls[0] : (evidenceUrls[i] || null);
       inventory.unshift({
         id: uid(), name, sn,
         productCode: 'CAM-' + String(inventory.length+1+i).padStart(4,'0'),
@@ -921,7 +933,7 @@ async function saveTransaction(){
         supplier: tx.vendor,
         purchaseCost: Math.round(perUnitCost*100)/100,
         dateIn: tx.date, status:'stock', salePrice:null, saleDate:null, customer:null, saleSlip:null,
-        evidencePhoto: evidencePhotoUrl || null
+        evidencePhoto
       });
     }
     await saveInventory();
@@ -1270,6 +1282,7 @@ function txRowHtml(t){
       <div class="name">${t.vendor}${t.note?' · '+t.note:''}</div>
       <div class="meta">${t.date} · ${t.category}</div>
       ${link?`<span class="badge">🔗 ${link.name}</span>`:''}
+      ${t.evidencePhotos?`<div class="thumb-row">${slipThumbsHtml(t.evidencePhotos, 'หลักฐาน')}</div>`:''}
     </div>
     <div style="text-align:right;">
       <div class="amt ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div>
