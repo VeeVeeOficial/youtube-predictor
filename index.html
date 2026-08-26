@@ -673,7 +673,12 @@ const saveSettings=()=>persist('settings',settings);
 //   income   — payment slips from customers (sales, invoices)
 //   shipping — shipping cost slips (ค่าจัดส่ง)
 //   parts    — parts/software purchase slips (อะไหล่)
-function categoryToFolderKey(category){
+function categoryToFolderKey(category, type){
+  // Route by transaction type first — any income (a sale, a deposit
+  // categorized as something else, etc.) belongs in the income folder
+  // regardless of which category label was picked. Category only
+  // narrows things further for expenses.
+  if(type === 'income') return 'income';
   if(category === 'ขายกล้อง/เลนส์') return 'income';
   if(category === 'ค่าจัดส่ง') return 'shipping';
   if(category === 'อะไหล่') return 'parts';
@@ -923,7 +928,7 @@ async function saveTransaction(){
     linkedItemId: document.getElementById('fLinkItem').value || null
   };
   const evidenceUrls = (await Promise.all(pendingReceipts.map(r =>
-    uploadImageToDrive(r.dataUrl, 'receipt', categoryToFolderKey(tx.category))
+    uploadImageToDrive(r.dataUrl, 'receipt', categoryToFolderKey(tx.category, tx.type))
   ))).filter(Boolean);
   tx.evidencePhotos = evidenceUrls.join(',');
   transactions.unshift(tx);
