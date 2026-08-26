@@ -242,7 +242,7 @@
     <div class="field" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
       <label>Claude API Key (สำหรับสลิป AI)</label>
       <input type="password" id="pApiKey" placeholder="sk-ant-...">
-      <div class="hint">คีย์นี้จะถูกเก็บไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น และถูกส่งตรงไปยัง Anthropic API เพื่ออ่านสลิปเท่านั้น ไม่ถูกส่งไปที่อื่น</div>
+      <div class="hint">คีย์นี้จะถูกซิงก์เก็บไว้ใน Google Sheet ของร้าน (เพื่อให้ใช้ได้ทุกเครื่อง/มือถือโดยไม่ต้องกรอกใหม่) และถูกส่งตรงไปยัง Anthropic API เพื่ออ่านสลิปเท่านั้น — ผู้ที่เข้าถึง Sheet นี้ได้จะเห็นคีย์นี้ได้ด้วย</div>
     </div>
     <div class="row-btns" style="margin-top:6px;">
       <button class="btn ghost" onclick="closeProfileModal()">ปิด</button>
@@ -578,24 +578,36 @@ async function loadAll(){
     settings.taxRate = remote.taxRate != null ? remote.taxRate : settings.taxRate;
     settings.costMode = remote.costMode || settings.costMode;
     settings.profile = remote.profile || settings.profile;
+    // The Claude API key/model now sync via the shared Sheet (source of
+    // truth) so they survive mobile Safari clearing local storage/cookies.
+    // Cache locally too as a fast-path/offline fallback.
+    if(remote.claudeApiKey){
+      settings.claudeApiKey = remote.claudeApiKey;
+      settings.claudeModel = remote.claudeModel || 'claude-sonnet-5';
+      try{
+        const localPayload = JSON.stringify({ claudeApiKey: settings.claudeApiKey, claudeModel: settings.claudeModel });
+        localStorage.setItem(STORAGE_PREFIX+'local', localPayload);
+        setLocalCookie_(STORAGE_PREFIX+'local', localPayload, 365);
+      }catch(e){}
+    }
   }catch(e){
     console.error('loadAll failed', e);
     showToast('⚠ โหลดข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วลองรีเฟรชหน้าใหม่', 5000);
   }
-  // Claude API key/model stay local-only (never synced to the shared Sheet).
-  // Check localStorage first, fall back to the cookie backup if that's
-  // empty, and re-sync both so either one being cleared doesn't lose it.
-  try{
-    let localRaw = localStorage.getItem(STORAGE_PREFIX+'local');
-    if(!localRaw) localRaw = getLocalCookie_(STORAGE_PREFIX+'local');
-    if(localRaw){
-      const local = JSON.parse(localRaw);
-      settings.claudeApiKey = local.claudeApiKey || '';
-      settings.claudeModel = local.claudeModel || 'claude-sonnet-5';
-      try{ localStorage.setItem(STORAGE_PREFIX+'local', localRaw); }catch(e){}
-      setLocalCookie_(STORAGE_PREFIX+'local', localRaw, 365);
-    }
-  }catch(e){}
+  // Fallback if the remote Sheet had no key yet (e.g. load failed, or a
+  // brand-new device before the first remote sync completed): check
+  // localStorage, then the cookie backup.
+  if(!settings.claudeApiKey){
+    try{
+      let localRaw = localStorage.getItem(STORAGE_PREFIX+'local');
+      if(!localRaw) localRaw = getLocalCookie_(STORAGE_PREFIX+'local');
+      if(localRaw){
+        const local = JSON.parse(localRaw);
+        settings.claudeApiKey = local.claudeApiKey || '';
+        settings.claudeModel = local.claudeModel || 'claude-sonnet-5';
+      }
+    }catch(e){}
+  }
   if(!settings.profile) settings.profile={shopName:'',ownerName:'',address:'',phone:'',taxId:''};
   if(!settings.costMode) settings.costMode='detailed';
   if(!settings.claudeModel) settings.claudeModel='claude-sonnet-5';
@@ -607,16 +619,16 @@ async function loadAll(){
 }
 async function persist(key,val){
   if(key === 'settings'){
-    // Save the API key/model locally FIRST, independent of whether the
-    // remote Sheet sync below succeeds — it's a per-device secret and must
-    // never be lost just because the network/Sheet had a hiccup.
+    // Cache the API key/model locally too, independent of whether the
+    // remote Sheet sync below succeeds, so it's still available offline —
+    // but the Sheet is now the source of truth (synced across devices).
     try{
       const localPayload = JSON.stringify({ claudeApiKey: val.claudeApiKey||'', claudeModel: val.claudeModel||'claude-sonnet-5' });
       localStorage.setItem(STORAGE_PREFIX+'local', localPayload);
       setLocalCookie_(STORAGE_PREFIX+'local', localPayload, 365);
     }catch(e){ console.error('local settings save failed', e); }
     try{
-      await apiSave('settings', { taxRate: val.taxRate, costMode: val.costMode, profile: val.profile });
+      await apiSave('settings', { taxRate: val.taxRate, costMode: val.costMode, profile: val.profile, claudeApiKey: val.claudeApiKey||'', claudeModel: val.claudeModel||'claude-sonnet-5' });
       return true;
     }catch(e){
       console.error('storage failed for settings', e);

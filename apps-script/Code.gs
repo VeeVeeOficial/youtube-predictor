@@ -109,7 +109,9 @@ function readSettings_() {
   return {
     taxRate: Number(flat.taxRate || 5),
     costMode: flat.costMode || 'detailed',
-    profile: profile
+    profile: profile,
+    claudeApiKey: flat.claudeApiKey || '',
+    claudeModel: flat.claudeModel || 'claude-sonnet-5'
   };
 }
 
@@ -121,7 +123,9 @@ function writeSettings_(settingsObj) {
   var rows = [
     ['taxRate', settingsObj.taxRate || 5],
     ['costMode', settingsObj.costMode || 'detailed'],
-    ['profile', JSON.stringify(settingsObj.profile || {})]
+    ['profile', JSON.stringify(settingsObj.profile || {})],
+    ['claudeApiKey', settingsObj.claudeApiKey || ''],
+    ['claudeModel', settingsObj.claudeModel || 'claude-sonnet-5']
   ];
   sheet.getRange(2, 1, rows.length, 2).setValues(rows);
 }
