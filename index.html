@@ -778,6 +778,7 @@ function openAddModal(){
   document.getElementById('snRowsWrap').innerHTML='';
   document.getElementById('stkQty').value=1;
   document.getElementById('stkName').value='';
+  setTxType(currentTxType); // re-validate the category against the type left over from last time
   document.getElementById('txModalBackdrop').classList.add('open');
 }
 function closeAddModal(){
@@ -793,6 +794,16 @@ function setTxType(t){
   currentTxType = t;
   document.getElementById('typeBtnIncome').classList.toggle('on', t==='income');
   document.getElementById('typeBtnExpense').classList.toggle('on', t==='expense');
+  // The category dropdown is shared between income/expense and doesn't
+  // reset on its own — left on a leftover expense category (e.g. "อะไหล่")
+  // it would silently route an income slip's photo to the wrong Drive
+  // folder. "ขายกล้อง/เลนส์" is the only income category, so lock it in.
+  const catSel = document.getElementById('fCategory');
+  if(t === 'income'){
+    catSel.value = 'ขายกล้อง/เลนส์';
+  } else if(catSel.value === 'ขายกล้อง/เลนส์'){
+    catSel.value = 'ค่าใช้จ่ายเบ็ดเตล็ด';
+  }
 }
 function populateLinkItemSelect(){
   const sel = document.getElementById('fLinkItem');
