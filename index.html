@@ -842,10 +842,10 @@ function handleFileUpload(e){
     // Uploaded at save time (not here) — the category (which decides the
     // destination Drive folder) can still change via the AI scan below or
     // the dropdown, and isn't final until saveTransaction() runs.
-    if(pendingReceipts.length) await scanReceipt(pendingReceipts[0].base64, 'image/jpeg');
+    if(pendingReceipts.length) await scanReceipt(pendingReceipts, 'image/jpeg');
   }).catch(()=>showToast('ประมวลผลรูปไม่สำเร็จ ลองใหม่อีกครั้ง'));
 }
-async function scanReceipt(base64, mediaType){
+async function scanReceipt(receiptsToScan, mediaType){
   const statusEl = document.getElementById('scanStatus');
   const statusText = document.getElementById('scanStatusText');
   if(!settings.claudeApiKey){
@@ -855,6 +855,10 @@ async function scanReceipt(base64, mediaType){
   }
   statusEl.style.display='flex'; statusText.textContent='AI กำลังอ่านสลิป...';
   try{
+    const imageBlocks = receiptsToScan.map(r => ({type:'image', source:{type:'base64', media_type:mediaType, data:r.base64}}));
+    const multiNote = receiptsToScan.length > 1
+      ? `นี่คือรูปสลิป/ใบเสร็จ ${receiptsToScan.length} ใบ ซึ่งทั้งหมดเป็นหลักฐานของรายการเดียวกัน (เช่น โอนเงินหลายรอบ/หลายงวดสำหรับคำสั่งซื้อเดียวกัน) — ให้รวมยอดเงินจากทุกใบเข้าด้วยกันเป็นยอดเดียว`
+      : 'นี่คือรูปสลิป/ใบเสร็จ/บิลของร้านขายกล้องมือสอง';
     const resp = await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{
@@ -866,8 +870,8 @@ async function scanReceipt(base64, mediaType){
       body: JSON.stringify({
         model: settings.claudeModel || 'claude-sonnet-5', max_tokens:1000,
         messages:[{ role:'user', content:[
-          {type:'image', source:{type:'base64', media_type:mediaType, data:base64}},
-          {type:'text', text:'นี่คือรูปสลิป/ใบเสร็จ/บิลของร้านขายกล้องมือสอง วิเคราะห์แล้วตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นนอกเหนือจาก JSON ห้ามใช้ markdown code fence รูปแบบ JSON: {"vendor": "ชื่อร้าน/คู่ค้า", "date": "YYYY-MM-DD", "amount": ตัวเลขจำนวนเงินรวมสุดท้าย, "type": "income หรือ expense", "category": "หนึ่งใน [ขายกล้อง/เลนส์, ซื้อกล้อง/เลนส์เข้าสต็อก, อะไหล่, ค่าแรงช่าง, ค่าจัดส่ง, ค่าใช้จ่ายเบ็ดเตล็ด, อื่นๆ]", "note": "สรุปสั้นๆ", "isCameraOrLensPurchase": true หรือ false, "itemName": "ชื่อรุ่นกล้อง/เลนส์ถ้าระบุได้ ไม่งั้นว่าง", "quantity": จำนวนชิ้นถ้าเป็นการซื้อกล้อง/เลนส์ (ปกติ 1)}'}
+          ...imageBlocks,
+          {type:'text', text:multiNote+' วิเคราะห์แล้วตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นนอกเหนือจาก JSON ห้ามใช้ markdown code fence รูปแบบ JSON: {"vendor": "ชื่อร้าน/คู่ค้า", "date": "YYYY-MM-DD", "amount": ตัวเลขจำนวนเงินรวมสุดท้าย (ถ้ามีหลายใบ ให้เป็นผลรวมของทุกใบ), "type": "income หรือ expense", "category": "หนึ่งใน [ขายกล้อง/เลนส์, ซื้อกล้อง/เลนส์เข้าสต็อก, อะไหล่, ค่าแรงช่าง, ค่าจัดส่ง, ค่าใช้จ่ายเบ็ดเตล็ด, อื่นๆ]", "note": "สรุปสั้นๆ", "isCameraOrLensPurchase": true หรือ false, "itemName": "ชื่อรุ่นกล้อง/เลนส์ถ้าระบุได้ ไม่งั้นว่าง", "quantity": จำนวนชิ้นถ้าเป็นการซื้อกล้อง/เลนส์ (ปกติ 1)}'}
         ]}]
       })
     });
