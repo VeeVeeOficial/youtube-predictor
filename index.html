@@ -566,6 +566,7 @@ function apiGetJsonp(params){
   });
 }
 
+let initialLoadDone = false;
 async function loadAll(){
   try{
     const data = await apiGetJsonp({ action: 'loadAll', t: Date.now() });
@@ -616,6 +617,7 @@ async function loadAll(){
   setCostMode(settings.costMode, true);
   updateShopSub();
   renderAll();
+  initialLoadDone = true;
 }
 async function persist(key,val){
   if(key === 'settings'){
@@ -724,7 +726,11 @@ function setStockFilter(filter){
 }
 
 // ---------- Profile ----------
-function openProfileModal(){
+async function openProfileModal(){
+  if(!initialLoadDone){
+    showToast('กำลังโหลดข้อมูล กรุณารอสักครู่...', 2500);
+    try{ await initialLoadPromise; }catch(e){}
+  }
   const p = settings.profile;
   document.getElementById('pShopName').value = p.shopName||'';
   document.getElementById('pOwnerName').value = p.ownerName||'';
@@ -1320,7 +1326,7 @@ document.getElementById('taxRateInput').addEventListener('input', async (e)=>{
   renderAll();
 });
 
-loadAll();
+const initialLoadPromise = loadAll();
 </script>
 </body>
 </html>
