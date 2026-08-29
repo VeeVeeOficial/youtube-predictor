@@ -13,7 +13,7 @@ var SPREADSHEET_ID = '1-7LvGF-YykwFllEjyj1HscK2cxQ-Gr6VCcQoEsknscg'; // FrameLed
 // deployed "New version", so this is the only reliable way to confirm a
 // redeploy actually took effect (the Apps Script editor's "last saved" time
 // does NOT mean the public URL is running that code yet).
-var BACKEND_VERSION = 4;
+var BACKEND_VERSION = 5;
 
 // Slips get routed to different Drive folders depending on what they
 // document, chosen by the frontend via the 'folderKey' upload param.
@@ -21,7 +21,9 @@ var FOLDER_MAP = {
   general: '1fACSjyzIjhUUEh-8cS7sDwThv34hPliq',  // camera/lens purchase evidence (default)
   income: '19DVWk9e3aDApM0g2qg2lPeWHRHjv7XKe',   // payment slips from customers (sales, invoices)
   shipping: '170mJWu_8hZD7j7fJ5kPgnnksnkPfanQ4',  // shipping cost slips (ค่าจัดส่ง)
-  parts: '1QHJM-vfiWCLj-boR9Ldm7FYHUuUmQVBM'      // parts/software purchase slips (อะไหล่)
+  parts: '1QHJM-vfiWCLj-boR9Ldm7FYHUuUmQVBM',     // parts/software purchase slips (อะไหล่)
+  partnerGeneral: '15FUkj9eROYvL2ukzkYHXTIyr_vSYt0hL', // purchases paid out of แฟน's account
+  partnerIncome: '1ccJ9L4011kNOov5XnH1ZIzYHNPRUGIuP'   // sales/payments received into แฟน's account
 };
 
 var COLLECTION_SHEETS = {
@@ -32,7 +34,7 @@ var COLLECTION_SHEETS = {
 };
 
 var SCHEMAS = {
-  Transactions: ['id', 'type', 'vendor', 'amount', 'date', 'category', 'note', 'linkedItemId', 'evidencePhotos'],
+  Transactions: ['id', 'type', 'vendor', 'amount', 'date', 'category', 'note', 'linkedItemId', 'evidencePhotos', 'account'],
   Inventory: ['id', 'name', 'sn', 'productCode', 'condition', 'supplier', 'purchaseCost', 'dateIn', 'status', 'salePrice', 'saleDate', 'customer', 'saleSlip', 'evidencePhoto'],
   Invoices: ['id', 'invNo', 'itemName', 'sn', 'productCode', 'customer', 'price', 'shipping', 'date', 'cost', 'profit', 'incomeTxId', 'shippingTxId'],
   Receipts: ['id', 'recNo', 'desc', 'amount', 'shipping', 'total', 'date']

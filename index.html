@@ -169,6 +169,11 @@
       <div class="stat"><div class="lbl">มูลค่าสต็อกคงเหลือ</div><div class="val" id="statStock">฿0</div></div>
     </div>
     <div class="card">
+      <h3>ยอดเงินเข้าต่อบัญชี (ปีนี้) — เพดาน ฿1,800,000</h3>
+      <div class="hint" style="margin-bottom:10px;">นับเฉพาะรายรับ สะสมตามปีปฏิทิน แยกตามบัญชีที่เงินเข้า เพื่อเตือนก่อนถึงเกณฑ์ที่ธนาคารต้องรายงานสรรพากร (รายได้ยังต้องยื่นภาษีตามจริงไม่ว่าจะเข้าบัญชีไหน)</div>
+      <div id="accountLimitCards"></div>
+    </div>
+    <div class="card">
       <h3>ประมาณการภาษี</h3>
       <div class="taxrow"><label>อัตราภาษีที่ตั้งไว้ (%)</label><input type="number" id="taxRateInput" value="5" step="0.5"></div>
       <div class="taxrow"><label>ภาษีโดยประมาณจากรายรับ</label><b id="taxEstimate" style="font-family:var(--mono);font-size:13px;">฿0</b></div>
@@ -186,6 +191,11 @@
   </div>
 
   <div class="view" id="view-transactions">
+    <div class="segmented2">
+      <button class="on" id="acctFilterAll" onclick="setAcctFilter('all')">ทั้งหมด</button>
+      <button id="acctFilterMe" onclick="setAcctFilter('me')">ฉัน</button>
+      <button id="acctFilterPartner" onclick="setAcctFilter('partner')">แฟน</button>
+    </div>
     <div class="card" id="txListCard"><h3>รายการรายรับ-รายจ่ายทั้งหมด</h3><div id="txList"></div></div>
   </div>
 
@@ -268,6 +278,15 @@
     <div class="segmented" style="margin:12px 0;">
       <button class="on income" id="typeBtnIncome" onclick="setTxType('income')">รายรับ</button>
       <button class="expense" id="typeBtnExpense" onclick="setTxType('expense')">รายจ่าย</button>
+    </div>
+
+    <div class="field">
+      <label>เจ้าของบัญชี (เงินเข้า/ออกบัญชีไหน)</label>
+      <select id="fAccount">
+        <option value="me">ฉัน (ธนภัทร)</option>
+        <option value="partner">แฟน (สิริรักษ์)</option>
+      </select>
+      <div class="hint" id="fAccountHint" style="display:none;">AI ตรวจพบชื่อในสลิปแล้วเลือกให้อัตโนมัติ — เปลี่ยนเองได้ถ้าไม่ตรง</div>
     </div>
 
     <div class="field"><label>รายการ / ร้านค้า / ผู้ขาย</label><input id="fVendor" placeholder="เช่น AliExpress, ลูกค้า, ร้านอะไหล่"></div>
@@ -429,6 +448,10 @@ let invEvidenceDataUrl = null;
 let existingEvidenceDataUrl = null;
 let evidTargetId = null;
 let soldTargetId = null;
+let acctFilter = 'all';
+
+const ACCOUNT_NAMES = { me: 'ธนภัทร ตันตระกูล', partner: 'สิริรักษ์ ไชยพร' };
+const ACCOUNT_LIMIT = 1800000;
 
 const todayStr = () => new Date().toISOString().slice(0,10);
 const fmt = n => '฿' + (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2});
@@ -669,11 +692,14 @@ const saveSettings=()=>persist('settings',settings);
 // ---------- Image upload (Drive, via Apps Script) ----------
 // Slips get routed to different Drive folders by what they document —
 // folderKey must match a key in FOLDER_MAP on the Apps Script side.
-//   general  — camera/lens purchase evidence (default)
-//   income   — payment slips from customers (sales, invoices)
-//   shipping — shipping cost slips (ค่าจัดส่ง)
-//   parts    — parts/software purchase slips (อะไหล่)
-function categoryToFolderKey(category, type){
+//   general        — camera/lens purchase evidence (default, my account)
+//   income         — payment slips from customers (sales, invoices, my account)
+//   shipping       — shipping cost slips (ค่าจัดส่ง, my account)
+//   parts          — parts/software purchase slips (อะไหล่, my account)
+//   partnerGeneral — purchases paid out of แฟน's account
+//   partnerIncome  — sales/payments received into แฟน's account
+function categoryToFolderKey(category, type, account){
+  if(account === 'partner') return type === 'income' ? 'partnerIncome' : 'partnerGeneral';
   // Route by transaction type first — any income (a sale, a deposit
   // categorized as something else, etc.) belongs in the income folder
   // regardless of which category label was picked. Category only
@@ -743,6 +769,14 @@ function setStockFilter(filter){
   renderInventory();
 }
 
+function setAcctFilter(filter){
+  acctFilter = filter;
+  document.getElementById('acctFilterAll').classList.toggle('on', filter==='all');
+  document.getElementById('acctFilterMe').classList.toggle('on', filter==='me');
+  document.getElementById('acctFilterPartner').classList.toggle('on', filter==='partner');
+  renderAll();
+}
+
 // ---------- Profile ----------
 async function openProfileModal(){
   if(!initialLoadDone){
@@ -783,6 +817,8 @@ function openAddModal(){
   document.getElementById('snRowsWrap').innerHTML='';
   document.getElementById('stkQty').value=1;
   document.getElementById('stkName').value='';
+  document.getElementById('fAccount').value = 'me';
+  document.getElementById('fAccountHint').style.display = 'none';
   setTxType(currentTxType); // re-validate the category against the type left over from last time
   document.getElementById('txModalBackdrop').classList.add('open');
 }
@@ -887,7 +923,7 @@ async function scanReceipt(receiptsToScan, mediaType){
         model: settings.claudeModel || 'claude-sonnet-5', max_tokens:1000,
         messages:[{ role:'user', content:[
           ...imageBlocks,
-          {type:'text', text:multiNote+' วิเคราะห์แล้วตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นนอกเหนือจาก JSON ห้ามใช้ markdown code fence รูปแบบ JSON: {"vendor": "ชื่อร้าน/คู่ค้า", "date": "YYYY-MM-DD", "amount": ตัวเลขจำนวนเงินรวมสุดท้าย (ถ้ามีหลายใบ ให้เป็นผลรวมของทุกใบ), "type": "income หรือ expense", "category": "หนึ่งใน [ขายกล้อง/เลนส์, ซื้อกล้อง/เลนส์เข้าสต็อก, อะไหล่, ค่าแรงช่าง, ค่าจัดส่ง, ค่าใช้จ่ายเบ็ดเตล็ด, อื่นๆ]", "note": "สรุปสั้นๆ", "isCameraOrLensPurchase": true หรือ false, "itemName": "ชื่อรุ่นกล้อง/เลนส์ถ้าระบุได้ ไม่งั้นว่าง", "quantity": จำนวนชิ้นถ้าเป็นการซื้อกล้อง/เลนส์ (ปกติ 1)}'}
+          {type:'text', text:multiNote+` วิเคราะห์แล้วตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นนอกเหนือจาก JSON ห้ามใช้ markdown code fence รูปแบบ JSON: {"vendor": "ชื่อร้าน/คู่ค้า", "date": "YYYY-MM-DD", "amount": ตัวเลขจำนวนเงินรวมสุดท้าย (ถ้ามีหลายใบ ให้เป็นผลรวมของทุกใบ), "type": "income หรือ expense", "category": "หนึ่งใน [ขายกล้อง/เลนส์, ซื้อกล้อง/เลนส์เข้าสต็อก, อะไหล่, ค่าแรงช่าง, ค่าจัดส่ง, ค่าใช้จ่ายเบ็ดเตล็ด, อื่นๆ]", "note": "สรุปสั้นๆ", "isCameraOrLensPurchase": true หรือ false, "itemName": "ชื่อรุ่นกล้อง/เลนส์ถ้าระบุได้ ไม่งั้นว่าง", "quantity": จำนวนชิ้นถ้าเป็นการซื้อกล้อง/เลนส์ (ปกติ 1), "accountOwner": "me, partner หรือ unknown — ดูจากชื่อผู้รับ/ผู้ส่งเงินในสลิป: me ถ้าเห็นชื่อ ${ACCOUNT_NAMES.me}, partner ถ้าเห็นชื่อ ${ACCOUNT_NAMES.partner}, unknown ถ้าไม่เห็นชื่อทั้งสองนี้ชัดเจน"}`}
         ]}]
       })
     });
@@ -903,6 +939,12 @@ async function scanReceipt(receiptsToScan, mediaType){
       document.getElementById('fNote').value = parsed.note || '';
       if(parsed.category) document.getElementById('fCategory').value = parsed.category;
       setTxType(parsed.type==='income' ? 'income' : 'expense');
+      if(parsed.accountOwner === 'me' || parsed.accountOwner === 'partner'){
+        document.getElementById('fAccount').value = parsed.accountOwner;
+        document.getElementById('fAccountHint').style.display = 'block';
+      } else {
+        document.getElementById('fAccountHint').style.display = 'none';
+      }
       if(parsed.isCameraOrLensPurchase && parsed.type==='expense'){
         document.getElementById('addAsStock').checked = true;
         document.getElementById('stkName').value = parsed.itemName || '';
@@ -925,10 +967,11 @@ async function saveTransaction(){
     amount, date: document.getElementById('fDate').value || todayStr(),
     category: document.getElementById('fCategory').value,
     note: document.getElementById('fNote').value,
-    linkedItemId: document.getElementById('fLinkItem').value || null
+    linkedItemId: document.getElementById('fLinkItem').value || null,
+    account: document.getElementById('fAccount').value || 'me'
   };
   const evidenceUrls = (await Promise.all(pendingReceipts.map(r =>
-    uploadImageToDrive(r.dataUrl, 'receipt', categoryToFolderKey(tx.category, tx.type))
+    uploadImageToDrive(r.dataUrl, 'receipt', categoryToFolderKey(tx.category, tx.type, tx.account))
   ))).filter(Boolean);
   tx.evidencePhotos = evidenceUrls.join(',');
   transactions.unshift(tx);
@@ -1263,10 +1306,11 @@ function exportJSON(){
   downloadBlob(JSON.stringify(payload,null,2), `frameledger-backup-${todayStr()}.json`, 'application/json');
 }
 function exportCSV(){
-  let rows = [['วันที่','ประเภท','รายการ/ร้านค้า','หมวดหมู่','จำนวนเงิน','โน้ต','ผูกกับสินค้า']];
+  let rows = [['วันที่','ประเภท','บัญชี','รายการ/ร้านค้า','หมวดหมู่','จำนวนเงิน','โน้ต','ผูกกับสินค้า']];
   transactions.forEach(t=>{
     const link = inventory.find(i=>i.id===t.linkedItemId);
-    rows.push([t.date, t.type==='income'?'รายรับ':'รายจ่าย', t.vendor, t.category, t.amount, t.note||'', link?link.name+' ('+(link.sn||'-')+')':'']);
+    const acctLabel = (t.account||'me')==='partner' ? 'แฟน' : 'ฉัน';
+    rows.push([t.date, t.type==='income'?'รายรับ':'รายจ่าย', acctLabel, t.vendor, t.category, t.amount, t.note||'', link?link.name+' ('+(link.sn||'-')+')':'']);
   });
   const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   downloadBlob('\uFEFF'+csv, `frameledger-transactions-${todayStr()}.csv`, 'text/csv');
@@ -1287,13 +1331,42 @@ function renderAll(){
   document.getElementById('statStock').textContent = fmt(stockValue);
   const taxRate = parseFloat(document.getElementById('taxRateInput').value)||0;
   document.getElementById('taxEstimate').textContent = fmt(totalIncome*taxRate/100);
+  renderAccountLimitCards();
 
   const recent = transactions.slice(0,5);
   document.getElementById('recentTx').innerHTML = recent.length ? recent.map(txRowHtml).join('') : '<div class="empty">ยังไม่มีรายการ<br><span style="font-size:11px;">กด + เพื่อเริ่มบันทึก</span></div>';
+  const filteredTx = acctFilter==='all' ? transactions : transactions.filter(t => (t.account||'me')===acctFilter);
   const txList = document.getElementById('txList');
-  txList.innerHTML = transactions.length ? transactions.map(txRowHtml).join('') : '<div class="empty"><div class="big">🧾</div>ยังไม่มีรายการรายรับ-รายจ่าย</div>';
+  txList.innerHTML = filteredTx.length ? filteredTx.map(txRowHtml).join('') : '<div class="empty"><div class="big">🧾</div>ยังไม่มีรายการรายรับ-รายจ่าย</div>';
 
   renderInventory();
+}
+function accountYearlyIncome(account){
+  const year = new Date().getFullYear();
+  return transactions
+    .filter(t => t.type==='income' && (t.account||'me')===account && t.date && t.date.slice(0,4)===String(year))
+    .reduce((s,t)=>s+t.amount, 0);
+}
+function renderAccountLimitCards(){
+  const wrap = document.getElementById('accountLimitCards');
+  if(!wrap) return;
+  const rows = [
+    { key:'me', label:'ฉัน ('+ACCOUNT_NAMES.me+')' },
+    { key:'partner', label:'แฟน ('+ACCOUNT_NAMES.partner+')' }
+  ];
+  wrap.innerHTML = rows.map(r=>{
+    const total = accountYearlyIncome(r.key);
+    const pct = Math.min(100, total/ACCOUNT_LIMIT*100);
+    const color = pct>=100 ? 'var(--rust)' : pct>=70 ? 'var(--gold)' : 'var(--moss)';
+    return `<div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+        <span>${r.label}</span><b style="font-family:var(--mono);">${fmt(total)} / ${fmt(ACCOUNT_LIMIT)}</b>
+      </div>
+      <div style="height:8px;border-radius:4px;background:var(--panel2);overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${color};"></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 function txRowHtml(t){
   const link = inventory.find(i=>i.id===t.linkedItemId);
@@ -1302,6 +1375,7 @@ function txRowHtml(t){
       <div class="name">${t.vendor}${t.note?' · '+t.note:''}</div>
       <div class="meta">${t.date} · ${t.category}</div>
       ${link?`<span class="badge">🔗 ${link.name}</span>`:''}
+      ${(t.account||'me')==='partner'?`<span class="badge">💳 แฟน</span>`:''}
       ${t.evidencePhotos?`<div class="thumb-row">${slipThumbsHtml(t.evidencePhotos, 'หลักฐาน')}</div>`:''}
     </div>
     <div style="text-align:right;">
