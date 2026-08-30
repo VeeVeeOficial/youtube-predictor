@@ -187,7 +187,7 @@
       </div>
       <button class="btn primary small" style="width:100%;" onclick="backupToDrive()">☁ สำรองขึ้น Google Drive</button>
     </div>
-    <div class="card"><h3>รายการล่าสุด</h3><div id="recentTx"></div></div>
+    <div class="card"><h3>รายการล่าสุด</h3><div id="recentTx" style="max-height:420px;overflow-y:auto;"></div></div>
   </div>
 
   <div class="view" id="view-transactions">
@@ -266,7 +266,7 @@
 <div class="modal-backdrop" id="txModalBackdrop">
   <div class="modal">
     <div class="modal-handle"></div>
-    <h2>เพิ่มรายรับ / รายจ่าย</h2>
+    <h2 id="txModalTitle">เพิ่มรายรับ / รายจ่าย</h2>
     <div class="upload" id="uploadZone" onclick="document.getElementById('fileInput').click()">
       <div class="ic">📎</div><div class="t1">แนบรูปสลิป / บิล / ใบเสร็จ (เลือกได้สูงสุด 10 รูป)</div>
       <div class="t2">AI จะอ่านยอดเงิน วันที่ และประเภทให้อัตโนมัติจากรูปแรก</div>
@@ -312,7 +312,7 @@
     </div>
     <div class="field"><label>โน้ต</label><textarea id="fNote" placeholder="รายละเอียดเพิ่มเติม"></textarea></div>
 
-    <div class="checkrow" onclick="toggleStockAdd()">
+    <div class="checkrow" id="addAsStockRow" onclick="toggleStockAdd()">
       <input type="checkbox" id="addAsStock" onclick="event.stopPropagation();toggleStockAdd()">
       <span>เพิ่มรายการนี้เข้าคลังสต็อกด้วย (กรอกจำนวน + SN + สภาพ)</span>
     </div>
@@ -449,6 +449,7 @@ let existingEvidenceDataUrl = null;
 let evidTargetId = null;
 let soldTargetId = null;
 let acctFilter = 'all';
+let editingTxId = null;
 
 const ACCOUNT_NAMES = { me: 'ธนภัทร ตันตระกูล', partner: 'สิริรักษ์ ไชยพร' };
 const ACCOUNT_LIMIT = 1800000;
@@ -829,6 +830,10 @@ async function saveProfile(){
 
 // ---------- Transaction modal ----------
 function openAddModal(){
+  editingTxId = null;
+  document.getElementById('txModalTitle').textContent = 'เพิ่มรายรับ / รายจ่าย';
+  document.getElementById('saveTxBtn').textContent = 'บันทึก';
+  document.getElementById('addAsStockRow').style.display = '';
   document.getElementById('fDate').value = todayStr();
   populateLinkItemSelect();
   document.getElementById('addAsStock').checked = false;
@@ -841,6 +846,36 @@ function openAddModal(){
   setTxType(currentTxType); // re-validate the category against the type left over from last time
   document.getElementById('txModalBackdrop').classList.add('open');
 }
+function openEditTxModal(txId){
+  const tx = transactions.find(t=>t.id===txId);
+  if(!tx) return;
+  editingTxId = txId;
+  document.getElementById('txModalTitle').textContent = 'แก้ไขรายการ';
+  document.getElementById('saveTxBtn').textContent = 'บันทึกการแก้ไข';
+  // Editing shouldn't also spin off new inventory items — that flow is
+  // only for first recording a purchase.
+  document.getElementById('addAsStockRow').style.display = 'none';
+  document.getElementById('addAsStock').checked = false;
+  document.getElementById('stockAddBlock').style.display='none';
+  populateLinkItemSelect();
+  currentTxType = tx.type;
+  document.getElementById('typeBtnIncome').classList.toggle('on', tx.type==='income');
+  document.getElementById('typeBtnExpense').classList.toggle('on', tx.type==='expense');
+  document.getElementById('fVendor').value = tx.vendor || '';
+  document.getElementById('fAmount').value = tx.amount;
+  document.getElementById('fDate').value = tx.date || todayStr();
+  document.getElementById('fCategory').value = tx.category || 'อื่นๆ'; // exact saved category, not the income/expense auto-default
+  document.getElementById('fNote').value = tx.note || '';
+  document.getElementById('fLinkItem').value = tx.linkedItemId || '';
+  document.getElementById('fAccount').value = tx.account || 'me';
+  document.getElementById('fAccountHint').style.display = 'none';
+  pendingReceipts = [];
+  const thumbsWrap = document.getElementById('receiptThumbs');
+  thumbsWrap.innerHTML = tx.evidencePhotos ? slipThumbsHtml(tx.evidencePhotos, 'หลักฐานเดิม') : '';
+  thumbsWrap.style.display = tx.evidencePhotos ? 'flex' : 'none';
+  document.getElementById('scanStatus').style.display = 'none';
+  document.getElementById('txModalBackdrop').classList.add('open');
+}
 function closeAddModal(){
   document.getElementById('txModalBackdrop').classList.remove('open');
   const thumbsWrap = document.getElementById('receiptThumbs');
@@ -849,6 +884,10 @@ function closeAddModal(){
   pendingReceipts = [];
   ['fVendor','fAmount','fNote'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('fLinkItem').value='';
+  editingTxId = null;
+  document.getElementById('txModalTitle').textContent = 'เพิ่มรายรับ / รายจ่าย';
+  document.getElementById('saveTxBtn').textContent = 'บันทึก';
+  document.getElementById('addAsStockRow').style.display = '';
 }
 function setTxType(t){
   currentTxType = t;
@@ -982,8 +1021,10 @@ async function saveTransaction(){
   if(!amount || amount<=0){ alert('กรุณากรอกจำนวนเงิน'); return; }
   if(isBtnLocked('saveTxBtn')) return;
   try{
+  const isEditing = !!editingTxId;
+  const existingTx = isEditing ? transactions.find(t=>t.id===editingTxId) : null;
   const tx = {
-    id: uid(), type: currentTxType,
+    id: isEditing ? editingTxId : uid(), type: currentTxType,
     vendor: document.getElementById('fVendor').value || '-',
     amount, date: document.getElementById('fDate').value || todayStr(),
     category: document.getElementById('fCategory').value,
@@ -991,13 +1032,22 @@ async function saveTransaction(){
     linkedItemId: document.getElementById('fLinkItem').value || null,
     account: document.getElementById('fAccount').value || 'me'
   };
-  const evidenceUrls = (await Promise.all(pendingReceipts.map(r =>
+  const newEvidenceUrls = (await Promise.all(pendingReceipts.map(r =>
     uploadImageToDrive(r.dataUrl, 'receipt', categoryToFolderKey(tx.category, tx.type, tx.account))
   ))).filter(Boolean);
-  tx.evidencePhotos = evidenceUrls.join(',');
-  transactions.unshift(tx);
+  // Editing keeps any evidence already attached and adds newly-uploaded
+  // photos alongside it, rather than throwing the old ones away.
+  const existingUrls = (isEditing && existingTx && existingTx.evidencePhotos) ? existingTx.evidencePhotos.split(',').filter(Boolean) : [];
+  tx.evidencePhotos = existingUrls.concat(newEvidenceUrls).join(',');
 
-  if(document.getElementById('addAsStock').checked && currentTxType==='expense'){
+  if(isEditing){
+    const idx = transactions.findIndex(t=>t.id===editingTxId);
+    if(idx>-1) transactions[idx] = tx;
+  } else {
+    transactions.unshift(tx);
+  }
+
+  if(!isEditing && document.getElementById('addAsStock').checked && currentTxType==='expense'){
     const name = document.getElementById('stkName').value.trim() || tx.category;
     let qty = parseInt(document.getElementById('stkQty').value)||1; if(qty<1) qty=1;
     const perUnitCost = amount / qty;
@@ -1364,7 +1414,7 @@ function renderAll(){
   document.getElementById('taxEstimate').textContent = fmt(totalIncome*taxRate/100);
   renderAccountLimitCards();
 
-  const recent = transactions.slice(0,5);
+  const recent = transactions.slice(0,20);
   document.getElementById('recentTx').innerHTML = recent.length ? recent.map(txRowHtml).join('') : '<div class="empty">ยังไม่มีรายการ<br><span style="font-size:11px;">กด + เพื่อเริ่มบันทึก</span></div>';
   const filteredTx = acctFilter==='all' ? transactions : transactions.filter(t => (t.account||'me')===acctFilter);
   const txList = document.getElementById('txList');
@@ -1411,7 +1461,10 @@ function txRowHtml(t){
     </div>
     <div style="text-align:right;">
       <div class="amt ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div>
-      <div onclick="deleteTx('${t.id}')" style="font-size:10px;color:var(--dim);cursor:pointer;margin-top:3px;">ลบ</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:3px;">
+        <span onclick="openEditTxModal('${t.id}')" style="font-size:10px;color:var(--gold);cursor:pointer;">แก้ไข</span>
+        <span onclick="deleteTx('${t.id}')" style="font-size:10px;color:var(--dim);cursor:pointer;">ลบ</span>
+      </div>
     </div>
   </div>`;
 }
