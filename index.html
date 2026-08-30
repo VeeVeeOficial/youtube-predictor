@@ -227,7 +227,7 @@
         <input type="file" accept="image/*" id="invSlipInput" multiple onchange="handleInvSlip(event)">
       </div>
       <div id="invSlipThumbs" class="thumb-row"></div>
-      <button class="btn primary" onclick="generateInvoice()">สร้างบิล + บันทึกรายรับ</button>
+      <button class="btn primary" id="generateInvoiceBtn" onclick="generateInvoice()">สร้างบิล + บันทึกรายรับ</button>
     </div>
     <div id="invoicePreview"></div>
     <div class="card" id="invoiceHistoryCard"><h3>ประวัติบิลที่ออก</h3><div id="invoiceHistory"></div></div>
@@ -328,7 +328,7 @@
     </div>
     <div class="row-btns" style="margin-top:8px;">
       <button class="btn ghost" onclick="closeAddModal()">ยกเลิก</button>
-      <button class="btn primary" onclick="saveTransaction()">บันทึก</button>
+      <button class="btn primary" id="saveTxBtn" onclick="saveTransaction()">บันทึก</button>
     </div>
   </div>
 </div>
@@ -356,7 +356,7 @@
     <img id="iEvidenceThumb" class="thumb" style="display:none;max-height:120px;">
     <div class="row-btns" style="margin-top:6px;">
       <button class="btn ghost" onclick="closeInvModal()">ยกเลิก</button>
-      <button class="btn primary" onclick="saveInventoryItem()">บันทึกเข้าคลัง</button>
+      <button class="btn primary" id="saveInvItemBtn" onclick="saveInventoryItem()">บันทึกเข้าคลัง</button>
     </div>
   </div>
 </div>
@@ -376,7 +376,7 @@
     <img id="sSlipThumb" class="thumb" style="display:none;max-height:120px;">
     <div class="row-btns" style="margin-top:6px;">
       <button class="btn ghost" onclick="closeSoldModal()">ยกเลิก</button>
-      <button class="btn primary" onclick="confirmSold()">ยืนยันขาย</button>
+      <button class="btn primary" id="confirmSoldBtn" onclick="confirmSold()">ยืนยันขาย</button>
     </div>
   </div>
 </div>
@@ -456,6 +456,25 @@ const ACCOUNT_LIMIT = 1800000;
 const todayStr = () => new Date().toISOString().slice(0,10);
 const fmt = n => '฿' + (Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2});
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+// Guards a save button against double-taps (common on slow mobile networks)
+// that would otherwise fire the async save handler twice and create
+// duplicate transactions/inventory items before the first save finishes.
+// Call at the very top of the handler; bail out (return true) if a save is
+// already in flight, otherwise lock the button and return false.
+function isBtnLocked(btnId){
+  const btn = document.getElementById(btnId);
+  if(btn.disabled) return true;
+  btn.disabled = true;
+  btn.dataset.origText = btn.textContent;
+  btn.textContent = 'กำลังบันทึก...';
+  return false;
+}
+function unlockBtn(btnId){
+  const btn = document.getElementById(btnId);
+  btn.disabled = false;
+  if(btn.dataset.origText) btn.textContent = btn.dataset.origText;
+}
 
 function showToast(msg, ms=3200){
   const t = document.createElement('div');
@@ -961,6 +980,8 @@ async function scanReceipt(receiptsToScan, mediaType){
 async function saveTransaction(){
   const amount = parseFloat(document.getElementById('fAmount').value);
   if(!amount || amount<=0){ alert('กรุณากรอกจำนวนเงิน'); return; }
+  if(isBtnLocked('saveTxBtn')) return;
+  try{
   const tx = {
     id: uid(), type: currentTxType,
     vendor: document.getElementById('fVendor').value || '-',
@@ -1006,6 +1027,7 @@ async function saveTransaction(){
   await saveTransactions();
   closeAddModal();
   renderAll();
+  } finally { unlockBtn('saveTxBtn'); }
 }
 
 // ---------- Inventory ----------
@@ -1033,6 +1055,8 @@ async function saveInventoryItem(){
   const name = document.getElementById('iName').value.trim();
   const cost = parseFloat(document.getElementById('iCost').value) || 0;
   if(!name){ alert('กรุณากรอกชื่อรุ่น'); return; }
+  if(isBtnLocked('saveInvItemBtn')) return;
+  try{
   const evidencePhotoUrl = await resolveImageUpload('invEvidence');
   const item = {
     id: uid(), name,
@@ -1049,6 +1073,7 @@ async function saveInventoryItem(){
   await saveInventory();
   closeInvModal();
   renderAll();
+  } finally { unlockBtn('saveInvItemBtn'); }
 }
 function itemCostBreakdown(itemId){
   const linked = transactions.filter(t=>t.linkedItemId===itemId && t.type==='expense');
@@ -1079,6 +1104,8 @@ async function confirmSold(){
   const price = parseFloat(document.getElementById('sPrice').value);
   if(!price || price<=0){ alert('กรุณากรอกราคาขาย'); return; }
   const item = inventory.find(i=>i.id===soldTargetId); if(!item) return;
+  if(isBtnLocked('confirmSoldBtn')) return;
+  try{
   item.status='sold'; item.salePrice=price;
   item.customer = document.getElementById('sCustomer').value || '-';
   item.saleDate = document.getElementById('sDate').value || todayStr();
@@ -1086,6 +1113,7 @@ async function confirmSold(){
   transactions.unshift({ id:uid(), type:'income', vendor:item.customer, amount:price, date:item.saleDate, category:'ขายกล้อง/เลนส์', note:`ขาย ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id });
   await saveInventory(); await saveTransactions();
   closeSoldModal(); renderAll();
+  } finally { unlockBtn('confirmSoldBtn'); }
 }
 async function reopenItem(itemId){
   const item = inventory.find(i=>i.id===itemId); if(!item) return;
@@ -1171,6 +1199,8 @@ async function generateInvoice(){
   const date = document.getElementById('invDate').value || todayStr();
   if(!item){ alert('เลือกกล้องที่จะขายก่อน'); return; }
   if(!price || price<=0){ alert('กรอกราคาขาย'); return; }
+  if(isBtnLocked('generateInvoiceBtn')) return;
+  try{
 
   // Shipping cost is a linked expense on the item — itemCostBreakdown()
   // already sums linked expenses into the item's total cost (same pattern
@@ -1195,6 +1225,7 @@ async function generateInvoice(){
   document.getElementById('invShipping').value='0';
   document.getElementById('invSlipThumbs').innerHTML=''; invSlipUploadPromises=[];
   renderAll();
+  } finally { unlockBtn('generateInvoiceBtn'); }
 }
 function renderInvoicePreview(inv){
   const p = settings.profile;
