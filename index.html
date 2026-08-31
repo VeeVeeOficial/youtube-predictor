@@ -307,8 +307,8 @@
       </select>
     </div>
     <div class="field">
-      <label>ผูกกับกล้องตัวไหนในคลัง (ไม่บังคับ — ใช้คำนวณต้นทุนต่อตัว)</label>
-      <select id="fLinkItem"><option value="">— ไม่ผูก —</option></select>
+      <label>ผูกกับกล้องตัวไหนในคลัง (เลือกได้หลายตัว — ถ้าเป็นค่าใช้จ่ายก้อนเดียวสำหรับหลายตัว เช่น ค่าซ่อมรวม จะหารเฉลี่ยให้อัตโนมัติ)</label>
+      <select id="fLinkItem" multiple size="4"></select>
     </div>
     <div class="field"><label>โน้ต</label><textarea id="fNote" placeholder="รายละเอียดเพิ่มเติม"></textarea></div>
 
@@ -866,7 +866,8 @@ function openEditTxModal(txId){
   document.getElementById('fDate').value = tx.date || todayStr();
   document.getElementById('fCategory').value = tx.category || 'อื่นๆ'; // exact saved category, not the income/expense auto-default
   document.getElementById('fNote').value = tx.note || '';
-  document.getElementById('fLinkItem').value = tx.linkedItemId || '';
+  const linkedIds = linkedItemIdsOf(tx);
+  Array.from(document.getElementById('fLinkItem').options).forEach(opt => { opt.selected = linkedIds.includes(opt.value); });
   document.getElementById('fAccount').value = tx.account || 'me';
   document.getElementById('fAccountHint').style.display = 'none';
   pendingReceipts = [];
@@ -883,7 +884,7 @@ function closeAddModal(){
   document.getElementById('scanStatus').style.display='none';
   pendingReceipts = [];
   ['fVendor','fAmount','fNote'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('fLinkItem').value='';
+  Array.from(document.getElementById('fLinkItem').options).forEach(opt => { opt.selected = false; });
   editingTxId = null;
   document.getElementById('txModalTitle').textContent = 'เพิ่มรายรับ / รายจ่าย';
   document.getElementById('saveTxBtn').textContent = 'บันทึก';
@@ -906,7 +907,7 @@ function setTxType(t){
 }
 function populateLinkItemSelect(){
   const sel = document.getElementById('fLinkItem');
-  sel.innerHTML = '<option value="">— ไม่ผูก —</option>' + inventory.map(i=>`<option value="${i.id}">${i.name} (SN: ${i.sn||'-'})</option>`).join('');
+  sel.innerHTML = inventory.map(i=>`<option value="${i.id}">${i.name} (SN: ${i.sn||'-'})</option>`).join('');
 }
 function onCategoryChange(){
   const cat = document.getElementById('fCategory').value;
@@ -929,10 +930,11 @@ function renderSNRows(){
   const wrap = document.getElementById('snRowsWrap');
   let html='';
   for(let i=0;i<qty;i++){
-    html += `<div class="snrow">
+    html += `<div class="snrow" style="flex-wrap:wrap;">
       <span class="idx">${i+1}</span>
       <input placeholder="SN (ถ้ามี)" data-role="sn" data-i="${i}">
       <input placeholder="สภาพ เช่น มือ2 90%" data-role="cond" data-i="${i}">
+      <input type="number" placeholder="ต้นทุนตัวนี้ (ว่าง = หารเฉลี่ยจากยอดรวม)" data-role="cost" data-i="${i}" style="flex:1 1 100%;">
     </div>`;
   }
   wrap.innerHTML = html;
@@ -1029,7 +1031,7 @@ async function saveTransaction(){
     amount, date: document.getElementById('fDate').value || todayStr(),
     category: document.getElementById('fCategory').value,
     note: document.getElementById('fNote').value,
-    linkedItemId: document.getElementById('fLinkItem').value || null,
+    linkedItemId: Array.from(document.getElementById('fLinkItem').selectedOptions).map(o=>o.value).filter(Boolean).join(',') || null,
     account: document.getElementById('fAccount').value || 'me'
   };
   const newEvidenceUrls = (await Promise.all(pendingReceipts.map(r =>
@@ -1056,16 +1058,22 @@ async function saveTransaction(){
       const row = rows[i];
       const sn = row ? row.querySelector('[data-role="sn"]').value.trim() : '';
       const cond = row ? row.querySelector('[data-role="cond"]').value.trim() : '';
+      // A per-item cost overrides the even split — useful when a lump-sum
+      // purchase covers items of different value (e.g. 4 cameras for one
+      // ฿40,000 transfer that weren't actually worth the same each).
+      const customCostRaw = row ? row.querySelector('[data-role="cost"]').value : '';
+      const customCost = parseFloat(customCostRaw);
+      const unitCost = (customCostRaw !== '' && !isNaN(customCost) && customCost >= 0) ? customCost : perUnitCost;
       // One shared photo covers every item in the batch (old behavior);
       // with multiple photos, match one-to-one by the order they were
       // attached (e.g. photo of camera #1's receipt -> item #1).
-      const evidencePhoto = evidenceUrls.length === 1 ? evidenceUrls[0] : (evidenceUrls[i] || null);
+      const evidencePhoto = newEvidenceUrls.length === 1 ? newEvidenceUrls[0] : (newEvidenceUrls[i] || null);
       inventory.unshift({
         id: uid(), name, sn,
         productCode: 'CAM-' + String(inventory.length+1+i).padStart(4,'0'),
         condition: cond,
         supplier: tx.vendor,
-        purchaseCost: Math.round(perUnitCost*100)/100,
+        purchaseCost: Math.round(unitCost*100)/100,
         dateIn: tx.date, status:'stock', salePrice:null, saleDate:null, customer:null, saleSlip:null,
         evidencePhoto
       });
@@ -1125,9 +1133,26 @@ async function saveInventoryItem(){
   renderAll();
   } finally { unlockBtn('saveInvItemBtn'); }
 }
+// linkedItemId can hold a comma-joined list of item ids (e.g. one lump-sum
+// repair paid for 4 cameras at once) as well as the usual single id — kept
+// as one field (no new Sheet column / redeploy needed) since a lone id is
+// just a one-item list.
+function linkedItemIdsOf(t){
+  return (t.linkedItemId||'').split(',').map(s=>s.trim()).filter(Boolean);
+}
+function linkedItemsOf(t){
+  return linkedItemIdsOf(t).map(id=>inventory.find(i=>i.id===id)).filter(Boolean);
+}
 function itemCostBreakdown(itemId){
-  const linked = transactions.filter(t=>t.linkedItemId===itemId && t.type==='expense');
-  const extra = linked.reduce((s,t)=>s+t.amount,0);
+  // A lump-sum expense linked to N items contributes 1/N of its amount to
+  // each item's cost — that share is what gets displayed and summed here.
+  const linked = transactions
+    .filter(t => t.type==='expense' && linkedItemIdsOf(t).includes(itemId))
+    .map(t => {
+      const ids = linkedItemIdsOf(t);
+      return Object.assign({}, t, { share: ids.length ? t.amount/ids.length : t.amount, linkCount: ids.length });
+    });
+  const extra = linked.reduce((s,t)=>s+t.share,0);
   const item = inventory.find(i=>i.id===itemId);
   const total = (item?item.purchaseCost:0) + extra;
   return { linked, total };
@@ -1389,9 +1414,9 @@ function exportJSON(){
 function exportCSV(){
   let rows = [['วันที่','ประเภท','บัญชี','รายการ/ร้านค้า','หมวดหมู่','จำนวนเงิน','โน้ต','ผูกกับสินค้า']];
   transactions.forEach(t=>{
-    const link = inventory.find(i=>i.id===t.linkedItemId);
+    const links = linkedItemsOf(t);
     const acctLabel = (t.account||'me')==='partner' ? 'แฟน' : 'ฉัน';
-    rows.push([t.date, t.type==='income'?'รายรับ':'รายจ่าย', acctLabel, t.vendor, t.category, t.amount, t.note||'', link?link.name+' ('+(link.sn||'-')+')':'']);
+    rows.push([t.date, t.type==='income'?'รายรับ':'รายจ่าย', acctLabel, t.vendor, t.category, t.amount, t.note||'', links.map(i=>i.name+' ('+(i.sn||'-')+')').join('; ')]);
   });
   const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   downloadBlob('\uFEFF'+csv, `frameledger-transactions-${todayStr()}.csv`, 'text/csv');
@@ -1450,12 +1475,15 @@ function renderAccountLimitCards(){
   }).join('');
 }
 function txRowHtml(t){
-  const link = inventory.find(i=>i.id===t.linkedItemId);
+  const links = linkedItemsOf(t);
+  const linkBadge = links.length===1 ? `🔗 ${links[0].name}`
+    : links.length>1 ? `🔗 ${links.length} ตัว: ${links.map(i=>i.name).join(', ')} (หารเฉลี่ย)`
+    : '';
   return `<div class="tx">
     <div class="l">
       <div class="name">${t.vendor}${t.note?' · '+t.note:''}</div>
       <div class="meta">${t.date} · ${t.category}</div>
-      ${link?`<span class="badge">🔗 ${link.name}</span>`:''}
+      ${linkBadge?`<span class="badge">${linkBadge}</span>`:''}
       ${(t.account||'me')==='partner'?`<span class="badge">💳 แฟน</span>`:''}
       ${t.evidencePhotos?`<div class="thumb-row">${slipThumbsHtml(t.evidencePhotos, 'หลักฐาน')}</div>`:''}
     </div>
@@ -1497,7 +1525,7 @@ function renderInventory(){
             <div class="cost-line"><span>ต้นทุนรวม (โหมดภาพรวม)</span><b>${fmt(total)}</b></div>
           ` : `
             <div class="cost-line"><span>ต้นทุนซื้อเข้า</span><b>${fmt(item.purchaseCost)}</b></div>
-            ${linked.map(l=>`<div class="cost-line"><span>+ ${l.category}${l.note?' ('+l.note+')':''}</span><b>${fmt(l.amount)}</b></div>`).join('')}
+            ${linked.map(l=>`<div class="cost-line"><span>+ ${l.category}${l.note?' ('+l.note+')':''}${l.linkCount>1?' — หาร '+l.linkCount+' ตัว':''}</span><b>${fmt(l.share)}</b></div>`).join('')}
             <div class="cost-total"><span>ต้นทุนรวม</span><span>${fmt(total)}</span></div>
           `}
           ${item.status==='sold'?`
