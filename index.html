@@ -373,14 +373,15 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <h2>บันทึกการขาย</h2>
-    <div class="field"><label>ราคาขาย (บาท)</label><input type="number" id="sPrice" placeholder="0"></div>
-    <div class="field"><label>ลูกค้า</label><input id="sCustomer" placeholder="ชื่อลูกค้า"></div>
-    <div class="field"><label>วันที่ขาย</label><input type="date" id="sDate"></div>
     <div class="field">
-      <label>แนบสลิปโอนเงินจากลูกค้า (ไม่บังคับ)</label>
+      <label>แนบสลิปโอนเงินจากลูกค้า (ไม่บังคับ — AI จะอ่านราคาขาย/ลูกค้าให้อัตโนมัติ)</label>
       <input type="file" accept="image/*" id="sSlipInput" onchange="handleSoldSlip(event)">
     </div>
     <img id="sSlipThumb" class="thumb" style="display:none;max-height:120px;">
+    <div class="scan-status" id="soldScanStatus" style="display:none"><div class="dot-anim"></div><span id="soldScanStatusText">AI กำลังอ่านสลิป...</span></div>
+    <div class="field"><label>ราคาขาย (บาท)</label><input type="number" id="sPrice" placeholder="0"></div>
+    <div class="field"><label>ลูกค้า</label><input id="sCustomer" placeholder="ชื่อลูกค้า"></div>
+    <div class="field"><label>วันที่ขาย</label><input type="date" id="sDate"></div>
     <div class="row-btns" style="margin-top:6px;">
       <button class="btn ghost" onclick="closeSoldModal()">ยกเลิก</button>
       <button class="btn primary" id="confirmSoldBtn" onclick="confirmSold()">ยืนยันขาย</button>
@@ -988,6 +989,37 @@ function handleFileUpload(e){
     if(pendingReceipts.length) await scanReceipt(pendingReceipts, 'image/jpeg');
   }).catch(()=>showToast('ประมวลผลรูปไม่สำเร็จ ลองใหม่อีกครั้ง'));
 }
+// Shared Claude-vision call — returns the parsed JSON (or null if the model
+// didn't return valid JSON), throws on an actual API/network failure. Both
+// the add-transaction scan and the mark-sold scan below use this.
+async function callClaudeVision(receiptsToScan, mediaType){
+  const imageBlocks = receiptsToScan.map(r => ({type:'image', source:{type:'base64', media_type:mediaType, data:r.base64}}));
+  const multiNote = receiptsToScan.length > 1
+    ? `นี่คือรูปสลิป/ใบเสร็จ ${receiptsToScan.length} ใบ ซึ่งทั้งหมดเป็นหลักฐานของรายการเดียวกัน (เช่น โอนเงินหลายรอบ/หลายงวดสำหรับคำสั่งซื้อเดียวกัน) — ให้รวมยอดเงินจากทุกใบเข้าด้วยกันเป็นยอดเดียว`
+    : 'นี่คือรูปสลิป/ใบเสร็จ/บิลของร้านขายกล้องมือสอง';
+  const resp = await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key': settings.claudeApiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: settings.claudeModel || 'claude-sonnet-5', max_tokens:1000,
+      messages:[{ role:'user', content:[
+        ...imageBlocks,
+        {type:'text', text:multiNote+` วิเคราะห์แล้วตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นนอกเหนือจาก JSON ห้ามใช้ markdown code fence รูปแบบ JSON: {"vendor": "ชื่อร้าน/คู่ค้า", "date": "YYYY-MM-DD", "amount": ตัวเลขจำนวนเงินรวมสุดท้าย (ถ้ามีหลายใบ ให้เป็นผลรวมของทุกใบ), "type": "income หรือ expense", "category": "หนึ่งใน [ขายกล้อง/เลนส์, ซื้อกล้อง/เลนส์เข้าสต็อก, อะไหล่, ค่าแรงช่าง, ค่าจัดส่ง, ค่าใช้จ่ายเบ็ดเตล็ด, อื่นๆ]", "note": "สรุปสั้นๆ", "isCameraOrLensPurchase": true หรือ false, "itemName": "ชื่อรุ่นกล้อง/เลนส์ถ้าระบุได้ ไม่งั้นว่าง", "quantity": จำนวนชิ้นถ้าเป็นการซื้อกล้อง/เลนส์ (ปกติ 1), "accountOwner": "me, partner หรือ unknown — ดูจากชื่อผู้รับ/ผู้ส่งเงินในสลิป: me ถ้าเห็นชื่อ ${ACCOUNT_NAMES.me}, partner ถ้าเห็นชื่อ ${ACCOUNT_NAMES.partner}, unknown ถ้าไม่เห็นชื่อทั้งสองนี้ชัดเจน"}`}
+      ]}]
+    })
+  });
+  const data = await resp.json();
+  if(!resp.ok){ throw new Error((data && data.error && data.error.message) || 'เรียก API ไม่สำเร็จ'); }
+  const textBlock = (data.content||[]).find(b=>b.type==='text');
+  if(!textBlock) return null;
+  let clean = textBlock.text.replace(/```json|```/g,'').trim();
+  try{ return JSON.parse(clean); }catch(e){ return null; }
+}
 async function scanReceipt(receiptsToScan, mediaType){
   const statusEl = document.getElementById('scanStatus');
   const statusText = document.getElementById('scanStatusText');
@@ -998,31 +1030,7 @@ async function scanReceipt(receiptsToScan, mediaType){
   }
   statusEl.style.display='flex'; statusText.textContent='AI กำลังอ่านสลิป...';
   try{
-    const imageBlocks = receiptsToScan.map(r => ({type:'image', source:{type:'base64', media_type:mediaType, data:r.base64}}));
-    const multiNote = receiptsToScan.length > 1
-      ? `นี่คือรูปสลิป/ใบเสร็จ ${receiptsToScan.length} ใบ ซึ่งทั้งหมดเป็นหลักฐานของรายการเดียวกัน (เช่น โอนเงินหลายรอบ/หลายงวดสำหรับคำสั่งซื้อเดียวกัน) — ให้รวมยอดเงินจากทุกใบเข้าด้วยกันเป็นยอดเดียว`
-      : 'นี่คือรูปสลิป/ใบเสร็จ/บิลของร้านขายกล้องมือสอง';
-    const resp = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'x-api-key': settings.claudeApiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: settings.claudeModel || 'claude-sonnet-5', max_tokens:1000,
-        messages:[{ role:'user', content:[
-          ...imageBlocks,
-          {type:'text', text:multiNote+` วิเคราะห์แล้วตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นนอกเหนือจาก JSON ห้ามใช้ markdown code fence รูปแบบ JSON: {"vendor": "ชื่อร้าน/คู่ค้า", "date": "YYYY-MM-DD", "amount": ตัวเลขจำนวนเงินรวมสุดท้าย (ถ้ามีหลายใบ ให้เป็นผลรวมของทุกใบ), "type": "income หรือ expense", "category": "หนึ่งใน [ขายกล้อง/เลนส์, ซื้อกล้อง/เลนส์เข้าสต็อก, อะไหล่, ค่าแรงช่าง, ค่าจัดส่ง, ค่าใช้จ่ายเบ็ดเตล็ด, อื่นๆ]", "note": "สรุปสั้นๆ", "isCameraOrLensPurchase": true หรือ false, "itemName": "ชื่อรุ่นกล้อง/เลนส์ถ้าระบุได้ ไม่งั้นว่าง", "quantity": จำนวนชิ้นถ้าเป็นการซื้อกล้อง/เลนส์ (ปกติ 1), "accountOwner": "me, partner หรือ unknown — ดูจากชื่อผู้รับ/ผู้ส่งเงินในสลิป: me ถ้าเห็นชื่อ ${ACCOUNT_NAMES.me}, partner ถ้าเห็นชื่อ ${ACCOUNT_NAMES.partner}, unknown ถ้าไม่เห็นชื่อทั้งสองนี้ชัดเจน"}`}
-        ]}]
-      })
-    });
-    const data = await resp.json();
-    if(!resp.ok){ throw new Error((data && data.error && data.error.message) || 'เรียก API ไม่สำเร็จ'); }
-    const textBlock = (data.content||[]).find(b=>b.type==='text');
-    let parsed=null;
-    if(textBlock){ let clean = textBlock.text.replace(/```json|```/g,'').trim(); try{ parsed=JSON.parse(clean); }catch(e){ parsed=null; } }
+    const parsed = await callClaudeVision(receiptsToScan, mediaType);
     if(parsed){
       document.getElementById('fVendor').value = parsed.vendor || '';
       document.getElementById('fAmount').value = parsed.amount || '';
@@ -1193,17 +1201,41 @@ function itemCostBreakdown(itemId){
 
 function handleSoldSlip(e){
   const file=e.target.files[0]; if(!file) return;
-  compressImage(file,900,0.6).then(dataUrl=>{
+  compressImage(file,900,0.6).then(async dataUrl=>{
     soldSlipDataUrl = dataUrl;
     document.getElementById('sSlipThumb').src = dataUrl;
     document.getElementById('sSlipThumb').style.display='block';
     startImageUpload('soldSlip', dataUrl, 'sale-slip', 'income');
+    await scanSoldSlip([{ base64: dataUrl.split(',')[1] }], 'image/jpeg');
   });
+}
+async function scanSoldSlip(receiptsToScan, mediaType){
+  const statusEl = document.getElementById('soldScanStatus');
+  const statusText = document.getElementById('soldScanStatusText');
+  if(!settings.claudeApiKey){
+    statusEl.style.display='flex';
+    statusText.textContent = '⚠ กรุณาตั้งค่า Claude API Key ที่ปุ่ม ⚙ ก่อนใช้สลิป AI';
+    return;
+  }
+  statusEl.style.display='flex'; statusText.textContent='AI กำลังอ่านสลิป...';
+  try{
+    const parsed = await callClaudeVision(receiptsToScan, mediaType);
+    if(parsed){
+      if(parsed.amount) document.getElementById('sPrice').value = parsed.amount;
+      if(parsed.vendor) document.getElementById('sCustomer').value = parsed.vendor;
+      if(parsed.date) document.getElementById('sDate').value = parsed.date;
+      statusText.textContent = 'อ่านสำเร็จ — ตรวจสอบข้อมูลก่อนบันทึก';
+      setTimeout(()=>{ statusEl.style.display='none'; }, 1800);
+    } else {
+      statusText.textContent = 'อ่านสลิปไม่สำเร็จ กรุณากรอกข้อมูลเอง';
+    }
+  }catch(err){ console.error(err); statusText.textContent='เกิดข้อผิดพลาด: '+err.message; }
 }
 function openSoldModal(itemId){
   soldTargetId=itemId; soldSlipDataUrl=null; pendingUploads.soldSlip = null;
   document.getElementById('sDate').value = todayStr();
   document.getElementById('sSlipThumb').style.display='none';
+  document.getElementById('soldScanStatus').style.display='none';
   document.getElementById('sPrice').value=''; document.getElementById('sCustomer').value='';
   document.getElementById('soldModalBackdrop').classList.add('open');
 }
