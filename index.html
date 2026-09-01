@@ -159,6 +159,7 @@
     <button class="tab" data-tab="transactions">รายรับ-จ่าย</button>
     <button class="tab" data-tab="inventory">คลังกล้อง</button>
     <button class="tab" data-tab="invoice">ออกบิล</button>
+    <button class="tab" data-tab="dailyprofit">กำไรรายวัน</button>
   </div>
 
   <div class="view active" id="view-dashboard">
@@ -250,6 +251,29 @@
     </div>
     <div id="invoicePreview"></div>
     <div class="card" id="invoiceHistoryCard"><h3>ประวัติบิลที่ออก</h3><div id="invoiceHistory"></div></div>
+  </div>
+
+  <div class="view" id="view-dailyprofit">
+    <div class="card" style="padding:12px 16px;">
+      <div class="field"><label>เลือกวันที่</label><input type="date" id="dpDate" onchange="renderDailyProfit()"></div>
+      <div class="row-btns">
+        <button class="btn ghost small" onclick="dpShiftDay(-1)">◀ เมื่อวาน</button>
+        <button class="btn ghost small" onclick="dpGoToday()">วันนี้</button>
+        <button class="btn ghost small" onclick="dpShiftDay(1)">พรุ่งนี้ ▶</button>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat profit"><div class="lbl">กำไรวันนี้ (จากการขาย)</div><div class="val" id="dpProfit">฿0</div></div>
+      <div class="stat"><div class="lbl">จำนวนตัวที่ขาย</div><div class="val" id="dpCount">0</div></div>
+      <div class="stat income"><div class="lbl">เงินเข้า (รายรับ)</div><div class="val" id="dpIncome">฿0</div></div>
+      <div class="stat expense"><div class="lbl">เงินออก (รายจ่าย)</div><div class="val" id="dpExpense">฿0</div></div>
+    </div>
+    <div class="card">
+      <h3>รายการที่ขายและทำกำไรวันนี้</h3>
+      <div class="hint" style="margin-bottom:8px;">กำไรต่อตัว = ราคาขาย − ต้นทุนรวม (ต้นทุนซื้อ + ค่าใช้จ่ายที่ผูกไว้กับตัวนั้น)</div>
+      <div id="dpSoldList"></div>
+    </div>
+    <div class="card"><h3>รายรับ-รายจ่ายทั้งหมดของวันนี้</h3><div id="dpTxList"></div></div>
   </div>
 
   <div class="fab-inner"><button class="fab-btn" onclick="openAddModal()">+</button></div>
@@ -841,6 +865,7 @@ document.querySelectorAll('.tab').forEach(t=>{
     t.classList.add('active');
     document.getElementById('view-'+t.dataset.tab).classList.add('active');
     if(t.dataset.tab==='invoice') populateInvoiceItemSelect();
+    if(t.dataset.tab==='dailyprofit') renderDailyProfit();
   });
 });
 
@@ -1685,6 +1710,64 @@ function renderAll(){
   txList.innerHTML = filteredTx.length ? filteredTx.map(txRowHtml).join('') : '<div class="empty"><div class="big">🧾</div>ยังไม่มีรายการรายรับ-รายจ่าย</div>';
 
   renderInventory();
+  renderDailyProfit();
+}
+// ---------- Daily profit ----------
+function dpShiftDay(delta){
+  const input = document.getElementById('dpDate');
+  const d = new Date((input.value || todayStr()) + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  input.value = d.toISOString().slice(0,10);
+  renderDailyProfit();
+}
+function dpGoToday(){
+  document.getElementById('dpDate').value = todayStr();
+  renderDailyProfit();
+}
+function renderDailyProfit(){
+  const dateEl = document.getElementById('dpDate');
+  if(!dateEl) return;
+  if(!dateEl.value) dateEl.value = todayStr();
+  const date = dateEl.value;
+
+  // "กำไร" here follows the same per-item cost-basis logic used in the
+  // inventory tab (salePrice - itemCostBreakdown total), not simple
+  // income-minus-expense cash flow — buying stock isn't a loss until sold.
+  const soldToday = inventory.filter(i => i.status==='sold' && i.saleDate===date);
+  let totalProfit = 0;
+  const soldRows = soldToday.map(item=>{
+    const {total:cost} = itemCostBreakdown(item.id);
+    const profit = (item.salePrice||0) - cost;
+    totalProfit += profit;
+    return {item, cost, profit};
+  }).sort((a,b)=>b.profit-a.profit);
+
+  const dayTx = transactions.filter(t=>t.date===date);
+  const dayIncome = dayTx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const dayExpense = dayTx.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+
+  document.getElementById('dpProfit').textContent = fmt(totalProfit);
+  document.getElementById('dpCount').textContent = soldToday.length;
+  document.getElementById('dpIncome').textContent = fmt(dayIncome);
+  document.getElementById('dpExpense').textContent = fmt(dayExpense);
+
+  const soldWrap = document.getElementById('dpSoldList');
+  soldWrap.innerHTML = soldRows.length ? soldRows.map(({item,cost,profit})=>`
+    <div class="item-card" style="margin-bottom:8px;">
+      <div class="item-top">
+        <div><div class="item-name">${item.name}</div><div class="item-sn">SN: ${item.sn||'-'} · ลูกค้า: ${item.customer||'-'}</div></div>
+        <span class="status-pill sold">ขายแล้ว</span>
+      </div>
+      <div class="cost-lines">
+        <div class="cost-line"><span>ราคาขาย</span><b>${fmt(item.salePrice)}</b></div>
+        <div class="cost-line"><span>ต้นทุนรวม</span><b>${fmt(cost)}</b></div>
+        <div class="profit-line"><span>กำไร</span><span>${fmt(profit)}</span></div>
+      </div>
+    </div>
+  `).join('') : '<div class="empty">ไม่มีรายการขายในวันนี้</div>';
+
+  const txWrap = document.getElementById('dpTxList');
+  txWrap.innerHTML = dayTx.length ? dayTx.map(txRowHtml).join('') : '<div class="empty">ไม่มีรายรับ-รายจ่ายในวันนี้</div>';
 }
 function renderExpenseBreakdown(){
   const wrap = document.getElementById('expenseBreakdown');
