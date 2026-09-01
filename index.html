@@ -857,7 +857,8 @@ function openEditTxModal(txId){
   document.getElementById('addAsStockRow').style.display = 'none';
   document.getElementById('addAsStock').checked = false;
   document.getElementById('stockAddBlock').style.display='none';
-  populateLinkItemSelect();
+  const linkedIds = linkedItemIdsOf(tx);
+  populateLinkItemSelect(linkedIds);
   currentTxType = tx.type;
   document.getElementById('typeBtnIncome').classList.toggle('on', tx.type==='income');
   document.getElementById('typeBtnExpense').classList.toggle('on', tx.type==='expense');
@@ -866,7 +867,6 @@ function openEditTxModal(txId){
   document.getElementById('fDate').value = tx.date || todayStr();
   document.getElementById('fCategory').value = tx.category || 'อื่นๆ'; // exact saved category, not the income/expense auto-default
   document.getElementById('fNote').value = tx.note || '';
-  const linkedIds = linkedItemIdsOf(tx);
   Array.from(document.getElementById('fLinkItem').options).forEach(opt => { opt.selected = linkedIds.includes(opt.value); });
   document.getElementById('fAccount').value = tx.account || 'me';
   document.getElementById('fAccountHint').style.display = 'none';
@@ -905,9 +905,15 @@ function setTxType(t){
     catSel.value = 'ค่าใช้จ่ายเบ็ดเตล็ด';
   }
 }
-function populateLinkItemSelect(){
+function populateLinkItemSelect(alsoIncludeIds){
   const sel = document.getElementById('fLinkItem');
-  sel.innerHTML = inventory.map(i=>`<option value="${i.id}">${i.name} (SN: ${i.sn||'-'})</option>`).join('');
+  // Only offer cameras still in stock — a sold item doesn't need more cost
+  // linked to it. Exception: keep whatever's already linked on the entry
+  // being edited in the list too, even if that item has since sold, so
+  // opening it for edit doesn't silently drop the existing link.
+  const keep = new Set(alsoIncludeIds || []);
+  const items = inventory.filter(i => i.status==='stock' || keep.has(i.id));
+  sel.innerHTML = items.map(i=>`<option value="${i.id}">${i.name} (SN: ${i.sn||'-'})${i.status==='sold'?' — ขายแล้ว':''}</option>`).join('');
 }
 function onCategoryChange(){
   const cat = document.getElementById('fCategory').value;
