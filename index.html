@@ -216,6 +216,13 @@
     <div class="card">
       <h3>สร้างบิลขาย</h3>
       <div class="field"><label>เลือกกล้องจากคลัง (สินค้าที่ยังไม่ขาย)</label><select id="invItemSelect"></select></div>
+      <div class="field">
+        <label>เจ้าของบัญชี (เงินขายเข้าบัญชีไหน)</label>
+        <select id="invAccount">
+          <option value="me">ฉัน (ธนภัทร)</option>
+          <option value="partner">แฟน (สิริรักษ์)</option>
+        </select>
+      </div>
       <div class="field"><label>ชื่อลูกค้า</label><input id="invCustomer" placeholder="ชื่อลูกค้า"></div>
       <div class="field field-row">
         <div class="field"><label>ราคาขาย (บาท)</label><input type="number" id="invPrice" placeholder="0"></div>
@@ -376,6 +383,13 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <h2>บันทึกการขาย</h2>
+    <div class="field">
+      <label>เจ้าของบัญชี (เงินขายเข้าบัญชีไหน)</label>
+      <select id="sAccount">
+        <option value="me">ฉัน (ธนภัทร)</option>
+        <option value="partner">แฟน (สิริรักษ์)</option>
+      </select>
+    </div>
     <div class="field">
       <label>แนบสลิปโอนเงินจากลูกค้า (ไม่บังคับ — แนบได้หลายรูป)</label>
       <input type="file" accept="image/*" id="sSlipInput" multiple onchange="handleSoldSlip(event)">
@@ -1251,7 +1265,8 @@ function handleSoldSlip(e){
       img.src = dataUrl; img.className = 'slip-thumb';
       img.onclick = () => viewSlip(dataUrl);
       thumbsWrap.appendChild(img);
-      soldSlipUploadPromises.push(uploadImageToDrive(dataUrl, 'sale-slip', 'income'));
+      const acct = document.getElementById('sAccount').value || 'me';
+      soldSlipUploadPromises.push(uploadImageToDrive(dataUrl, 'sale-slip', acct==='partner' ? 'partnerIncome' : 'income'));
     });
   });
 }
@@ -1259,6 +1274,7 @@ function openSoldModal(itemId){
   soldTargetId=itemId; soldSlipUploadPromises = [];
   document.getElementById('sDate').value = todayStr();
   document.getElementById('sSlipThumbs').innerHTML = '';
+  document.getElementById('sAccount').value = 'me';
   document.getElementById('sPrice').value=''; document.getElementById('sCustomer').value='';
   document.getElementById('soldModalBackdrop').classList.add('open');
 }
@@ -1274,7 +1290,8 @@ async function confirmSold(){
   item.saleDate = document.getElementById('sDate').value || todayStr();
   const saleSlipUrls = (await Promise.all(soldSlipUploadPromises)).filter(Boolean);
   item.saleSlip = saleSlipUrls.join(',');
-  transactions.unshift({ id:uid(), type:'income', vendor:item.customer, amount:price, date:item.saleDate, category:'ขายกล้อง/เลนส์', note:`ขาย ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id });
+  const account = document.getElementById('sAccount').value || 'me';
+  transactions.unshift({ id:uid(), type:'income', vendor:item.customer, amount:price, date:item.saleDate, category:'ขายกล้อง/เลนส์', note:`ขาย ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id, account });
   await saveInventory(); await saveTransactions();
   closeSoldModal(); renderAll();
   } finally { unlockBtn('confirmSoldBtn'); }
@@ -1349,8 +1366,10 @@ function handleInvSlip(e){
       img.src = dataUrl; img.className = 'slip-thumb';
       img.onclick = () => viewSlip(dataUrl);
       thumbsWrap.appendChild(img);
-      // sale slips are payment received from the customer — always income
-      invSlipUploadPromises.push(uploadImageToDrive(dataUrl, 'sale-slip', 'income'));
+      // sale slips are payment received from the customer — always income,
+      // but which account it lands in depends on the selector above.
+      const acct = document.getElementById('invAccount').value || 'me';
+      invSlipUploadPromises.push(uploadImageToDrive(dataUrl, 'sale-slip', acct==='partner' ? 'partnerIncome' : 'income'));
     });
   });
 }
@@ -1365,6 +1384,7 @@ async function generateInvoice(){
   if(!price || price<=0){ alert('กรอกราคาขาย'); return; }
   if(isBtnLocked('generateInvoiceBtn')) return;
   try{
+  const account = document.getElementById('invAccount').value || 'me';
 
   // Shipping cost is a linked expense on the item — itemCostBreakdown()
   // already sums linked expenses into the item's total cost (same pattern
@@ -1372,13 +1392,13 @@ async function generateInvoice(){
   let shippingTxId = null;
   if(shipping > 0){
     shippingTxId = uid();
-    transactions.unshift({ id:shippingTxId, type:'expense', vendor:'ค่าจัดส่ง', amount:shipping, date, category:'ค่าจัดส่ง', note:`ค่าส่ง ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id });
+    transactions.unshift({ id:shippingTxId, type:'expense', vendor:'ค่าจัดส่ง', amount:shipping, date, category:'ค่าจัดส่ง', note:`ค่าส่ง ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id, account });
   }
   const {total:cost} = itemCostBreakdown(item.id);
   const saleSlipUrls = (await Promise.all(invSlipUploadPromises)).filter(Boolean);
   item.status='sold'; item.salePrice=price; item.customer=customer; item.saleDate=date; item.saleSlip=saleSlipUrls.join(',');
   const incomeTxId = uid();
-  transactions.unshift({ id:incomeTxId, type:'income', vendor:customer, amount:price, date, category:'ขายกล้อง/เลนส์', note:`ขาย ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id });
+  transactions.unshift({ id:incomeTxId, type:'income', vendor:customer, amount:price, date, category:'ขายกล้อง/เลนส์', note:`ขาย ${item.name} (SN: ${item.sn||'-'})`, linkedItemId:item.id, account });
   const invNo = 'INV-' + (invoices.length+1).toString().padStart(4,'0');
   const inv = { id:uid(), invNo, itemName:item.name, sn:item.sn, productCode:item.productCode, customer, price, shipping, date, cost, profit: price-cost, incomeTxId, shippingTxId };
   invoices.unshift(inv);
@@ -1386,7 +1406,7 @@ async function generateInvoice(){
   renderInvoicePreview(inv);
   populateInvoiceItemSelect();
   document.getElementById('invPrice').value=''; document.getElementById('invCustomer').value='';
-  document.getElementById('invShipping').value='0';
+  document.getElementById('invShipping').value='0'; document.getElementById('invAccount').value='me';
   document.getElementById('invSlipThumbs').innerHTML=''; invSlipUploadPromises=[];
   renderAll();
   } finally { unlockBtn('generateInvoiceBtn'); }
