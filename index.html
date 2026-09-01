@@ -159,6 +159,7 @@
     <button class="tab" data-tab="transactions">รายรับ-จ่าย</button>
     <button class="tab" data-tab="inventory">คลังกล้อง</button>
     <button class="tab" data-tab="invoice">ออกบิล</button>
+    <button class="tab" data-tab="bestsellers">ขายดี</button>
   </div>
 
   <div class="view active" id="view-dashboard">
@@ -174,6 +175,18 @@
         <b id="statRealProfit" style="font-family:var(--mono);font-size:16px;color:var(--gold);">฿0</b>
       </div>
       <div class="hint" style="margin-top:4px;">= กำไรสุทธิ (เงินสด) + มูลค่าสต็อกคงเหลือ — เงินที่จ่ายไปซื้อของที่ยังขายไม่ได้ยังไม่ถือว่าขาดทุน แค่ยังไม่ได้เปลี่ยนเป็นเงินสด</div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;">
+        <h3 style="margin:0;">กำไรรายวัน</h3>
+        <input type="date" id="dailyProfitDate" style="width:auto;padding:6px 8px;font-family:var(--mono);font-size:12px;">
+      </div>
+      <div class="hint" style="margin-bottom:8px;">ดูว่าวันที่เลือกขายอะไรไปบ้างและกำไรตัวไหนเท่าไหร่</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+        <span style="font-size:12.5px;color:var(--dim);">กำไรรวม (<span id="dailyProfitCount">0</span> ตัว)</span>
+        <b id="dailyProfitTotal" style="font-family:var(--mono);font-size:18px;color:var(--gold);">฿0</b>
+      </div>
+      <div id="dailyProfitList"></div>
     </div>
     <div class="card">
       <h3>รายจ่ายแยกตามหมวดหมู่</h3>
@@ -250,6 +263,19 @@
     </div>
     <div id="invoicePreview"></div>
     <div class="card" id="invoiceHistoryCard"><h3>ประวัติบิลที่ออก</h3><div id="invoiceHistory"></div></div>
+  </div>
+
+  <div class="view" id="view-bestsellers">
+    <div class="card">
+      <h3>สินค้าขายดี & ราคาที่ควรรับซื้อ</h3>
+      <div class="hint" style="margin-bottom:10px;">สรุปจากประวัติการขายจริงทั้งหมด แยกตามชื่อรุ่น เพื่อดูว่ารุ่นไหนขายดี และควรรับซื้อเข้ามาที่ราคาเท่าไหร่ถึงจะยังได้กำไรตามเป้า</div>
+      <div class="taxrow"><label>เป้ากำไรขั้นต่ำ (% ของราคาขายเฉลี่ย)</label><input type="number" id="targetMarginInput" value="20" step="1" min="0" max="90"></div>
+      <div class="segmented2">
+        <button class="on" id="bsSortQty" onclick="setBsSort('qty')">เรียงตามจำนวนขาย</button>
+        <button id="bsSortProfit" onclick="setBsSort('profit')">เรียงตามกำไรรวม</button>
+      </div>
+    </div>
+    <div id="bestSellersList"></div>
   </div>
 
   <div class="fab-inner"><button class="fab-btn" onclick="openAddModal()">+</button></div>
@@ -511,7 +537,7 @@ let transactions = [];
 let inventory = [];
 let invoices = [];
 let receipts = [];
-let settings = { taxRate: 5, costMode:'detailed', claudeApiKey:'', claudeModel:'claude-sonnet-5', profile: { shopName:'', ownerName:'', address:'', phone:'', taxId:'' } };
+let settings = { taxRate: 5, costMode:'detailed', targetMarginPercent: 20, claudeApiKey:'', claudeModel:'claude-sonnet-5', profile: { shopName:'', ownerName:'', address:'', phone:'', taxId:'' } };
 let currentTxType = 'income';
 let pendingReceipts = []; // [{dataUrl, base64}] photos attached to the current income/expense entry
 let invEvidenceDataUrl = null;
@@ -695,6 +721,7 @@ async function loadAll(){
     const remote = data.settings || {};
     settings.taxRate = remote.taxRate != null ? remote.taxRate : settings.taxRate;
     settings.costMode = remote.costMode || settings.costMode;
+    settings.targetMarginPercent = remote.targetMarginPercent != null ? remote.targetMarginPercent : settings.targetMarginPercent;
     settings.profile = remote.profile || settings.profile;
     // The Claude API key/model now sync via the shared Sheet (source of
     // truth) so they survive mobile Safari clearing local storage/cookies.
@@ -732,6 +759,8 @@ async function loadAll(){
   if(!settings.claudeModel) settings.claudeModel='claude-sonnet-5';
   if(settings.claudeApiKey==null) settings.claudeApiKey='';
   document.getElementById('taxRateInput').value = settings.taxRate;
+  document.getElementById('targetMarginInput').value = settings.targetMarginPercent;
+  document.getElementById('dailyProfitDate').value = todayStr();
   setCostMode(settings.costMode, true);
   updateShopSub();
   renderAll();
@@ -757,7 +786,7 @@ async function persist(key,val){
       setLocalCookie_(STORAGE_PREFIX+'local', localPayload, 365);
     }catch(e){ console.error('local settings save failed', e); }
     try{
-      await apiSave('settings', { taxRate: val.taxRate, costMode: val.costMode, profile: val.profile, claudeApiKey: val.claudeApiKey||'', claudeModel: val.claudeModel||'claude-sonnet-5' });
+      await apiSave('settings', { taxRate: val.taxRate, costMode: val.costMode, targetMarginPercent: val.targetMarginPercent, profile: val.profile, claudeApiKey: val.claudeApiKey||'', claudeModel: val.claudeModel||'claude-sonnet-5' });
       return true;
     }catch(e){
       console.error('storage failed for settings', e);
@@ -841,6 +870,7 @@ document.querySelectorAll('.tab').forEach(t=>{
     t.classList.add('active');
     document.getElementById('view-'+t.dataset.tab).classList.add('active');
     if(t.dataset.tab==='invoice') populateInvoiceItemSelect();
+    if(t.dataset.tab==='bestsellers') renderBestSellers();
   });
 });
 
@@ -1677,6 +1707,7 @@ function renderAll(){
   document.getElementById('taxEstimate').textContent = fmt(totalIncome*taxRate/100);
   renderAccountLimitCards();
   renderExpenseBreakdown();
+  renderDailyProfit();
 
   const recent = transactions.slice(0,20);
   document.getElementById('recentTx').innerHTML = recent.length ? recent.map(txRowHtml).join('') : '<div class="empty">ยังไม่มีรายการ<br><span style="font-size:11px;">กด + เพื่อเริ่มบันทึก</span></div>';
@@ -1698,6 +1729,89 @@ function renderExpenseBreakdown(){
     ? rows.map(([cat,amt])=>`<div class="cost-line"><span>${cat}</span><b>${fmt(amt)}</b></div>`).join('')
     : '<div class="hint">ยังไม่มีรายจ่าย</div>';
 }
+function renderDailyProfit(){
+  const dateInput = document.getElementById('dailyProfitDate');
+  const date = dateInput.value || todayStr();
+  const soldThatDay = inventory.filter(i => i.status==='sold' && i.saleDate === date);
+  const rows = soldThatDay.map(item => {
+    const {total:cost} = itemCostBreakdown(item.id);
+    const profit = (item.salePrice||0) - cost;
+    return { item, cost, profit };
+  }).sort((a,b) => b.profit - a.profit);
+  const total = rows.reduce((s,r)=>s+r.profit, 0);
+  document.getElementById('dailyProfitCount').textContent = rows.length;
+  document.getElementById('dailyProfitTotal').textContent = fmt(total);
+  const listEl = document.getElementById('dailyProfitList');
+  listEl.innerHTML = rows.length ? rows.map(r => `
+    <div class="cost-line" style="align-items:center;">
+      <span>${r.item.name} <span style="color:var(--dim);">(SN: ${r.item.sn||'-'})</span></span>
+      <b style="color:${r.profit>=0?'var(--moss)':'var(--rust)'};">${fmt(r.profit)}</b>
+    </div>`).join('') : '<div class="hint">ไม่มีการขายในวันที่เลือก</div>';
+}
+document.getElementById('dailyProfitDate').addEventListener('change', renderDailyProfit);
+
+let bsSort = 'qty';
+function setBsSort(mode){
+  bsSort = mode;
+  document.getElementById('bsSortQty').classList.toggle('on', mode==='qty');
+  document.getElementById('bsSortProfit').classList.toggle('on', mode==='profit');
+  renderBestSellers();
+}
+function renderBestSellers(){
+  const wrap = document.getElementById('bestSellersList');
+  if(!wrap) return;
+  const marginPct = parseFloat(document.getElementById('targetMarginInput').value) || 0;
+  const sold = inventory.filter(i => i.status==='sold' && i.salePrice != null);
+  const groups = {};
+  sold.forEach(item => {
+    const key = (item.name || 'ไม่ระบุชื่อ').trim();
+    const {total:cost} = itemCostBreakdown(item.id);
+    const extra = cost - (item.purchaseCost || 0);
+    if(!groups[key]) groups[key] = { name:key, count:0, revenue:0, cost:0, purchaseCost:0, extra:0 };
+    const g = groups[key];
+    g.count++;
+    g.revenue += item.salePrice;
+    g.cost += cost;
+    g.purchaseCost += (item.purchaseCost || 0);
+    g.extra += extra;
+  });
+  let rows = Object.values(groups).map(g => {
+    const profit = g.revenue - g.cost;
+    const avgSale = g.revenue / g.count;
+    const avgExtra = g.extra / g.count;
+    const avgProfit = profit / g.count;
+    const avgPurchaseCost = g.purchaseCost / g.count;
+    // Max buy-back price that still hits the target margin: sale price
+    // minus the extra costs (repair/shipping/etc.) that come on top of the
+    // purchase price, minus the target profit slice of that sale price.
+    const suggestedBuy = Math.max(0, avgSale * (1 - marginPct/100) - avgExtra);
+    return Object.assign(g, { profit, avgSale, avgExtra, avgProfit, avgPurchaseCost, suggestedBuy });
+  });
+  rows.sort((a,b) => bsSort==='qty' ? (b.count - a.count) : (b.profit - a.profit));
+  if(!rows.length){
+    wrap.innerHTML = '<div class="card"><div class="empty"><div class="big">📊</div>ยังไม่มีประวัติการขาย</div></div>';
+    return;
+  }
+  wrap.innerHTML = rows.map(g => `
+    <div class="item-card">
+      <div class="item-top">
+        <div><div class="item-name">${g.name}</div><div class="item-sn">ขายแล้ว ${g.count} ตัว</div></div>
+        <span class="status-pill sold">กำไรรวม ${fmt(g.profit)}</span>
+      </div>
+      <div class="cost-lines">
+        <div class="cost-line"><span>ราคาขายเฉลี่ย</span><b>${fmt(g.avgSale)}</b></div>
+        <div class="cost-line"><span>ต้นทุนซื้อเข้าเฉลี่ย</span><b>${fmt(g.avgPurchaseCost)}</b></div>
+        <div class="cost-line"><span>ค่าใช้จ่ายเพิ่มเติมเฉลี่ย (ซ่อม/ส่ง ฯลฯ)</span><b>${fmt(g.avgExtra)}</b></div>
+        <div class="cost-line"><span>กำไรเฉลี่ยต่อตัว</span><b>${fmt(g.avgProfit)}</b></div>
+        <div class="profit-line"><span>💰 ราคาที่ควรรับซื้อไม่เกิน (เป้ากำไร ${marginPct}%)</span><span>${fmt(g.suggestedBuy)}</span></div>
+      </div>
+    </div>`).join('');
+}
+document.getElementById('targetMarginInput').addEventListener('input', async ()=>{
+  settings.targetMarginPercent = parseFloat(document.getElementById('targetMarginInput').value) || 0;
+  await saveSettings();
+  renderBestSellers();
+});
 function accountYearlyIncome(account){
   const year = new Date().getFullYear();
   return transactions

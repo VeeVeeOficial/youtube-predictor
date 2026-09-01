@@ -13,7 +13,7 @@ var SPREADSHEET_ID = '1-7LvGF-YykwFllEjyj1HscK2cxQ-Gr6VCcQoEsknscg'; // FrameLed
 // deployed "New version", so this is the only reliable way to confirm a
 // redeploy actually took effect (the Apps Script editor's "last saved" time
 // does NOT mean the public URL is running that code yet).
-var BACKEND_VERSION = 5;
+var BACKEND_VERSION = 6;
 
 // Slips get routed to different Drive folders depending on what they
 // document, chosen by the frontend via the 'folderKey' upload param.
@@ -118,6 +118,7 @@ function readSettings_() {
   return {
     taxRate: Number(flat.taxRate || 5),
     costMode: flat.costMode || 'detailed',
+    targetMarginPercent: Number(flat.targetMarginPercent != null && flat.targetMarginPercent !== '' ? flat.targetMarginPercent : 20),
     profile: profile,
     claudeApiKey: flat.claudeApiKey || '',
     claudeModel: flat.claudeModel || 'claude-sonnet-5'
@@ -132,6 +133,7 @@ function writeSettings_(settingsObj) {
   var rows = [
     ['taxRate', settingsObj.taxRate || 5],
     ['costMode', settingsObj.costMode || 'detailed'],
+    ['targetMarginPercent', settingsObj.targetMarginPercent != null ? settingsObj.targetMarginPercent : 20],
     ['profile', JSON.stringify(settingsObj.profile || {})],
     ['claudeApiKey', settingsObj.claudeApiKey || ''],
     ['claudeModel', settingsObj.claudeModel || 'claude-sonnet-5']
