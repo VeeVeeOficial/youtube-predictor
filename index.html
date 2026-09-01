@@ -317,10 +317,17 @@
       <span>เพิ่มรายการนี้เข้าคลังสต็อกด้วย (กรอกจำนวน + SN + สภาพ)</span>
     </div>
     <div id="stockAddBlock" style="display:none;">
-      <div class="field"><label>ชื่อรุ่นกล้อง/เลนส์</label><input id="stkName" placeholder="เช่น Canon 5D Mark III"></div>
-      <div class="field"><label>จำนวน (ตัว/ชิ้น)</label><input type="number" id="stkQty" min="1" value="1" oninput="renderSNRows()"></div>
+      <div class="field"><label>ชื่อรุ่นกล้อง/เลนส์ (ค่าเริ่มต้น — แก้แยกทีละตัวได้ด้านล่างถ้าซื้อมาคนละรุ่น)</label><input id="stkName" placeholder="เช่น Canon 5D Mark III"></div>
+      <div class="field">
+        <label>จำนวน (ตัว/ชิ้น)</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button type="button" class="btn ghost" style="width:40px;padding:8px 0;" onclick="bumpStockQty(-1)">−</button>
+          <input type="number" id="stkQty" min="1" value="1" oninput="renderSNRows()" style="text-align:center;">
+          <button type="button" class="btn ghost" style="width:40px;padding:8px 0;" onclick="bumpStockQty(1)">+</button>
+        </div>
+      </div>
       <div id="snRowsWrap"></div>
-      <div class="hint">ต้นทุนต่อตัวจะหารเฉลี่ยจากยอดรายจ่ายด้านบนอัตโนมัติ ปรับทีหลังได้ในคลัง</div>
+      <div class="hint">ถ้าซื้อมาคนละรุ่น กรอกชื่อรุ่นแยกในแต่ละแถวด้านบนนี้ได้เลย (ไม่กรอกจะใช้ชื่อรุ่นด้านบนแทน) — ต้นทุนต่อตัวจะหารเฉลี่ยจากยอดรายจ่ายด้านบนอัตโนมัติถ้าไม่ได้กรอกแยก ปรับทีหลังได้ในคลัง</div>
     </div>
 
     <div class="row-btns" style="margin-top:10px;">
@@ -930,17 +937,35 @@ function toggleStockAdd(forceOpen){
   document.getElementById('stockAddBlock').style.display = show ? 'block':'none';
   if(show) renderSNRows();
 }
+function bumpStockQty(delta){
+  const input = document.getElementById('stkQty');
+  let qty = (parseInt(input.value)||1) + delta;
+  if(qty<1) qty=1; if(qty>20) qty=20;
+  input.value = qty;
+  renderSNRows();
+}
 function renderSNRows(){
   let qty = parseInt(document.getElementById('stkQty').value)||1;
   if(qty<1) qty=1; if(qty>20) qty=20;
   const wrap = document.getElementById('snRowsWrap');
+  // Preserve whatever's already been typed into existing rows when the
+  // quantity changes, instead of wiping everything on every +/- tap.
+  const esc = s => (s||'').replace(/"/g,'&quot;');
+  const existing = Array.from(wrap.querySelectorAll('.snrow')).map(row => ({
+    name: row.querySelector('[data-role="name"]').value,
+    sn: row.querySelector('[data-role="sn"]').value,
+    cond: row.querySelector('[data-role="cond"]').value,
+    cost: row.querySelector('[data-role="cost"]').value
+  }));
   let html='';
   for(let i=0;i<qty;i++){
+    const v = existing[i] || {name:'',sn:'',cond:'',cost:''};
     html += `<div class="snrow" style="flex-wrap:wrap;">
       <span class="idx">${i+1}</span>
-      <input placeholder="SN (ถ้ามี)" data-role="sn" data-i="${i}">
-      <input placeholder="สภาพ เช่น มือ2 90%" data-role="cond" data-i="${i}">
-      <input type="number" placeholder="ต้นทุนตัวนี้ (ว่าง = หารเฉลี่ยจากยอดรวม)" data-role="cost" data-i="${i}" style="flex:1 1 100%;">
+      <input placeholder="ชื่อรุ่น (ถ้าต่างจากด้านบน)" data-role="name" data-i="${i}" value="${esc(v.name)}" style="flex:1 1 100%;">
+      <input placeholder="SN (ถ้ามี)" data-role="sn" data-i="${i}" value="${esc(v.sn)}">
+      <input placeholder="สภาพ เช่น มือ2 90%" data-role="cond" data-i="${i}" value="${esc(v.cond)}">
+      <input type="number" placeholder="ต้นทุนตัวนี้ (ว่าง = หารเฉลี่ยจากยอดรวม)" data-role="cost" data-i="${i}" value="${esc(v.cost)}" style="flex:1 1 100%;">
     </div>`;
   }
   wrap.innerHTML = html;
@@ -1056,12 +1081,14 @@ async function saveTransaction(){
   }
 
   if(!isEditing && document.getElementById('addAsStock').checked && currentTxType==='expense'){
-    const name = document.getElementById('stkName').value.trim() || tx.category;
+    const defaultName = document.getElementById('stkName').value.trim() || tx.category;
     let qty = parseInt(document.getElementById('stkQty').value)||1; if(qty<1) qty=1;
     const perUnitCost = amount / qty;
     const rows = document.querySelectorAll('#snRowsWrap .snrow');
     for(let i=0;i<qty;i++){
       const row = rows[i];
+      const rowName = row ? row.querySelector('[data-role="name"]').value.trim() : '';
+      const name = rowName || defaultName;
       const sn = row ? row.querySelector('[data-role="sn"]').value.trim() : '';
       const cond = row ? row.querySelector('[data-role="cond"]').value.trim() : '';
       // A per-item cost overrides the even split — useful when a lump-sum
