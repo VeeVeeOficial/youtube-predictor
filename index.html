@@ -405,6 +405,41 @@
   </div>
 </div>
 
+<!-- BULK SELL MODAL -->
+<div class="modal-backdrop" id="bulkSoldModalBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>ขายเหมาหลายตัว</h2>
+    <div class="field">
+      <label>เลือกกล้อง/เลนส์ที่ขาย (เลือกได้หลายตัว)</label>
+      <select id="bulkSoldItems" multiple size="6" onchange="renderBulkPriceRows()"></select>
+    </div>
+    <div class="field"><label>ลูกค้า</label><input id="bulkCustomer" placeholder="ชื่อลูกค้า"></div>
+    <div class="field-row">
+      <div class="field"><label>ราคารวมทั้งหมด (บาท)</label><input type="number" id="bulkTotalPrice" placeholder="0"></div>
+      <div class="field"><label>วันที่ขาย</label><input type="date" id="bulkSoldDate"></div>
+    </div>
+    <div class="field">
+      <label>เจ้าของบัญชี (เงินขายเข้าบัญชีไหน)</label>
+      <select id="bulkAccount">
+        <option value="me">ฉัน (ธนภัทร)</option>
+        <option value="partner">แฟน (สิริรักษ์)</option>
+      </select>
+    </div>
+    <div id="bulkPriceRowsWrap"></div>
+    <div class="hint">ถ้าแต่ละตัวขายราคาไม่เท่ากัน กรอกแยกราคาตัวนั้นๆ ด้านบนได้เลย ตัวที่ไม่กรอกจะหารเฉลี่ยจากยอดรวมที่เหลือ</div>
+    <div class="field">
+      <label>แนบสลิปโอนเงินจากลูกค้า (ไม่บังคับ — แนบได้หลายรูป)</label>
+      <input type="file" accept="image/*" id="bulkSlipInput" multiple onchange="handleBulkSlip(event)">
+    </div>
+    <div id="bulkSlipThumbs" class="thumb-row"></div>
+    <div class="row-btns" style="margin-top:6px;">
+      <button class="btn ghost" onclick="closeBulkSoldModal()">ยกเลิก</button>
+      <button class="btn primary" id="confirmBulkSoldBtn" onclick="confirmBulkSold()">ยืนยันขายเหมา</button>
+    </div>
+  </div>
+</div>
+
 <!-- EVIDENCE UPLOAD FOR EXISTING ITEM -->
 <div class="modal-backdrop" id="evidModalBackdrop">
   <div class="modal">
@@ -1296,6 +1331,87 @@ async function confirmSold(){
   closeSoldModal(); renderAll();
   } finally { unlockBtn('confirmSoldBtn'); }
 }
+
+// ---------- Bulk sell (e.g. a reseller buying several items at once) ----------
+let bulkSlipUploadPromises = [];
+function openBulkSoldModal(){
+  bulkSlipUploadPromises = [];
+  document.getElementById('bulkSoldDate').value = todayStr();
+  document.getElementById('bulkCustomer').value = '';
+  document.getElementById('bulkTotalPrice').value = '';
+  document.getElementById('bulkAccount').value = 'me';
+  document.getElementById('bulkSlipThumbs').innerHTML = '';
+  document.getElementById('bulkPriceRowsWrap').innerHTML = '';
+  const sel = document.getElementById('bulkSoldItems');
+  sel.innerHTML = inventory.filter(i=>i.status==='stock').map(i=>`<option value="${i.id}">${i.name} (SN: ${i.sn||'-'})</option>`).join('');
+  document.getElementById('bulkSoldModalBackdrop').classList.add('open');
+}
+function closeBulkSoldModal(){ document.getElementById('bulkSoldModalBackdrop').classList.remove('open'); }
+function renderBulkPriceRows(){
+  const selected = Array.from(document.getElementById('bulkSoldItems').selectedOptions);
+  const wrap = document.getElementById('bulkPriceRowsWrap');
+  // Preserve any prices already typed in, keyed by item id, when the selection changes.
+  const existing = {};
+  wrap.querySelectorAll('[data-role="price"]').forEach(inp => { existing[inp.dataset.id] = inp.value; });
+  wrap.innerHTML = selected.map(opt => {
+    const item = inventory.find(i=>i.id===opt.value);
+    return `<div class="snrow" style="flex-wrap:wrap;">
+      <span class="idx" style="width:auto;flex:1 1 100%;">${item ? item.name : ''}</span>
+      <input type="number" placeholder="ราคาตัวนี้ (ว่าง = หารเฉลี่ยจากยอดที่เหลือ)" data-role="price" data-id="${opt.value}" value="${existing[opt.value]||''}" style="flex:1 1 100%;">
+    </div>`;
+  }).join('');
+}
+function handleBulkSlip(e){
+  const files = Array.from(e.target.files || []);
+  if(!files.length) return;
+  const thumbsWrap = document.getElementById('bulkSlipThumbs');
+  files.forEach(file => {
+    compressImage(file,900,0.6).then(dataUrl=>{
+      const img = document.createElement('img');
+      img.src = dataUrl; img.className = 'slip-thumb';
+      img.onclick = () => viewSlip(dataUrl);
+      thumbsWrap.appendChild(img);
+      const acct = document.getElementById('bulkAccount').value || 'me';
+      bulkSlipUploadPromises.push(uploadImageToDrive(dataUrl, 'sale-slip', acct==='partner' ? 'partnerIncome' : 'income'));
+    });
+  });
+}
+async function confirmBulkSold(){
+  const selectedIds = Array.from(document.getElementById('bulkSoldItems').selectedOptions).map(o=>o.value);
+  if(!selectedIds.length){ alert('เลือกกล้อง/เลนส์ที่จะขายอย่างน้อย 1 ตัว'); return; }
+  const totalPrice = parseFloat(document.getElementById('bulkTotalPrice').value);
+  if(!totalPrice || totalPrice<=0){ alert('กรอกราคารวม'); return; }
+  if(isBtnLocked('confirmBulkSoldBtn')) return;
+  try{
+    const customer = document.getElementById('bulkCustomer').value || '-';
+    const date = document.getElementById('bulkSoldDate').value || todayStr();
+    const account = document.getElementById('bulkAccount').value || 'me';
+    const saleSlipUrls = (await Promise.all(bulkSlipUploadPromises)).filter(Boolean);
+    const saleSlipJoined = saleSlipUrls.join(',');
+
+    const customPrices = {};
+    document.querySelectorAll('#bulkPriceRowsWrap [data-role="price"]').forEach(inp => {
+      const v = parseFloat(inp.value);
+      if(inp.value !== '' && !isNaN(v) && v >= 0) customPrices[inp.dataset.id] = v;
+    });
+    const customSum = Object.values(customPrices).reduce((s,v)=>s+v, 0);
+    const unfilledIds = selectedIds.filter(id => customPrices[id] == null);
+    const remainingShare = unfilledIds.length ? (totalPrice - customSum) / unfilledIds.length : 0;
+
+    selectedIds.forEach(id => {
+      const item = inventory.find(i=>i.id===id);
+      if(!item) return;
+      const price = customPrices[id] != null ? customPrices[id] : remainingShare;
+      item.status='sold'; item.salePrice = Math.round(price*100)/100;
+      item.customer = customer; item.saleDate = date; item.saleSlip = saleSlipJoined;
+    });
+    transactions.unshift({ id:uid(), type:'income', vendor:customer, amount: totalPrice, date, category:'ขายกล้อง/เลนส์', note:`ขายเหมา ${selectedIds.length} ตัว`, linkedItemId: selectedIds.join(','), account, evidencePhotos: saleSlipJoined });
+    await saveInventory(); await saveTransactions();
+    closeBulkSoldModal(); renderAll();
+    showToast(`บันทึกขายเหมา ${selectedIds.length} ตัวแล้ว`);
+  } finally { unlockBtn('confirmBulkSoldBtn'); }
+}
+
 async function reopenItem(itemId){
   const item = inventory.find(i=>i.id===itemId); if(!item) return;
   if(!confirm('เปลี่ยนสถานะกลับเป็นในคลัง? (รายการรายรับจากการขายจะยังอยู่ ต้องลบเองถ้าต้องการ)')) return;
@@ -1610,9 +1726,12 @@ function renderInventory(){
   const lump = settings.costMode==='lump';
   const filtered = stockFilter==='all' ? inventory : inventory.filter(it => it.status===stockFilter);
   const filterLabel = stockFilter==='stock' ? 'ในคลัง' : stockFilter==='sold' ? 'ขายแล้ว' : 'ทั้งหมด';
-  let html = `<div class="card" style="display:flex;align-items:center;justify-content:space-between;">
+  let html = `<div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
       <div><h3 style="margin:0;">คลังกล้อง/เลนส์</h3><div style="font-size:11px;color:var(--dim);margin-top:2px;">${filtered.length} รายการ (${filterLabel}) จากทั้งหมด ${inventory.length} รายการ</div></div>
-      <button class="btn primary small" onclick="openInvModal()">+ เพิ่มกล้อง</button>
+      <div class="row-btns" style="margin:0;">
+        <button class="btn ghost small" onclick="openBulkSoldModal()">🧾 ขายเหมาหลายตัว</button>
+        <button class="btn primary small" onclick="openInvModal()">+ เพิ่มกล้อง</button>
+      </div>
     </div>`;
   if(!filtered.length){
     html += `<div class="empty"><div class="big">📷</div>ไม่มีรายการใน "${filterLabel}"</div>`;
