@@ -1726,8 +1726,13 @@ function renderInventory(){
   const lump = settings.costMode==='lump';
   const filtered = stockFilter==='all' ? inventory : inventory.filter(it => it.status===stockFilter);
   const filterLabel = stockFilter==='stock' ? 'ในคลัง' : stockFilter==='sold' ? 'ขายแล้ว' : 'ทั้งหมด';
+  const filteredCostTotal = filtered.reduce((s,it)=>s+itemCostBreakdown(it.id).total, 0);
   let html = `<div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-      <div><h3 style="margin:0;">คลังกล้อง/เลนส์</h3><div style="font-size:11px;color:var(--dim);margin-top:2px;">${filtered.length} รายการ (${filterLabel}) จากทั้งหมด ${inventory.length} รายการ</div></div>
+      <div>
+        <h3 style="margin:0;">คลังกล้อง/เลนส์</h3>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px;">${filtered.length} รายการ (${filterLabel}) จากทั้งหมด ${inventory.length} รายการ</div>
+        <div style="font-size:12.5px;color:var(--gold);margin-top:4px;">ต้นทุนรวม (${filterLabel}): ${fmt(filteredCostTotal)}</div>
+      </div>
       <div class="row-btns" style="margin:0;">
         <button class="btn ghost small" onclick="openBulkSoldModal()">🧾 ขายเหมาหลายตัว</button>
         <button class="btn primary small" onclick="openInvModal()">+ เพิ่มกล้อง</button>
