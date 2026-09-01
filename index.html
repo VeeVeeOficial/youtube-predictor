@@ -176,6 +176,11 @@
       <div class="hint" style="margin-top:4px;">= กำไรสุทธิ (เงินสด) + มูลค่าสต็อกคงเหลือ — เงินที่จ่ายไปซื้อของที่ยังขายไม่ได้ยังไม่ถือว่าขาดทุน แค่ยังไม่ได้เปลี่ยนเป็นเงินสด</div>
     </div>
     <div class="card">
+      <h3>รายจ่ายแยกตามหมวดหมู่</h3>
+      <div class="hint" style="margin-bottom:8px;">เพื่อให้เห็นว่าเงินที่จ่ายไปทั้งหมดไปที่ไหนบ้าง — ไม่ใช่แค่ซื้อของเข้าสต็อกอย่างเดียว</div>
+      <div id="expenseBreakdown"></div>
+    </div>
+    <div class="card">
       <h3>ยอดเงินเข้าต่อบัญชี (ปีนี้) — เพดาน ฿1,800,000</h3>
       <div class="hint" style="margin-bottom:10px;">นับเฉพาะรายรับ สะสมตามปีปฏิทิน แยกตามบัญชีที่เงินเข้า เพื่อเตือนก่อนถึงเกณฑ์ที่ธนาคารต้องรายงานสรรพากร (รายได้ยังต้องยื่นภาษีตามจริงไม่ว่าจะเข้าบัญชีไหน)</div>
       <div id="accountLimitCards"></div>
@@ -1671,6 +1676,7 @@ function renderAll(){
   const taxRate = parseFloat(document.getElementById('taxRateInput').value)||0;
   document.getElementById('taxEstimate').textContent = fmt(totalIncome*taxRate/100);
   renderAccountLimitCards();
+  renderExpenseBreakdown();
 
   const recent = transactions.slice(0,20);
   document.getElementById('recentTx').innerHTML = recent.length ? recent.map(txRowHtml).join('') : '<div class="empty">ยังไม่มีรายการ<br><span style="font-size:11px;">กด + เพื่อเริ่มบันทึก</span></div>';
@@ -1679,6 +1685,18 @@ function renderAll(){
   txList.innerHTML = filteredTx.length ? filteredTx.map(txRowHtml).join('') : '<div class="empty"><div class="big">🧾</div>ยังไม่มีรายการรายรับ-รายจ่าย</div>';
 
   renderInventory();
+}
+function renderExpenseBreakdown(){
+  const wrap = document.getElementById('expenseBreakdown');
+  if(!wrap) return;
+  const byCat = {};
+  transactions.filter(t=>t.type==='expense').forEach(t=>{
+    byCat[t.category] = (byCat[t.category]||0) + t.amount;
+  });
+  const rows = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  wrap.innerHTML = rows.length
+    ? rows.map(([cat,amt])=>`<div class="cost-line"><span>${cat}</span><b>${fmt(amt)}</b></div>`).join('')
+    : '<div class="hint">ยังไม่มีรายจ่าย</div>';
 }
 function accountYearlyIncome(account){
   const year = new Date().getFullYear();
