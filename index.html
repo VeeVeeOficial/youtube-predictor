@@ -344,7 +344,7 @@
 <div class="modal-backdrop" id="invModalBackdrop">
   <div class="modal">
     <div class="modal-handle"></div>
-    <h2>รับกล้อง/เลนส์เข้าคลัง</h2>
+    <h2 id="invModalTitle">รับกล้อง/เลนส์เข้าคลัง</h2>
     <div class="field"><label>ชื่อรุ่น</label><input id="iName" placeholder="เช่น Canon 5D Mark III"></div>
     <div class="field-row">
       <div class="field"><label>Serial Number (SN)</label><input id="iSN" placeholder="เช่น 123456789"></div>
@@ -364,6 +364,9 @@
     <div class="row-btns" style="margin-top:6px;">
       <button class="btn ghost" onclick="closeInvModal()">ยกเลิก</button>
       <button class="btn primary" id="saveInvItemBtn" onclick="saveInventoryItem()">บันทึกเข้าคลัง</button>
+    </div>
+    <div class="row-btns" style="margin-top:6px;" id="invDeleteRow" hidden>
+      <button class="btn ghost" style="color:var(--rust);border-color:var(--rust);" onclick="deleteItem(editingInvId); closeInvModal();">ลบตัวนี้ออกจากคลัง</button>
     </div>
   </div>
 </div>
@@ -458,6 +461,7 @@ let evidTargetId = null;
 let soldTargetId = null;
 let acctFilter = 'all';
 let editingTxId = null;
+let editingInvId = null;
 
 const ACCOUNT_NAMES = { me: 'ธนภัทร ตันตระกูล', partner: 'สิริรักษ์ ไชยพร' };
 const ACCOUNT_LIMIT = 1800000;
@@ -1131,14 +1135,42 @@ async function saveTransaction(){
 
 // ---------- Inventory ----------
 function openInvModal(){
+  editingInvId = null;
+  document.getElementById('invModalTitle').textContent = 'รับกล้อง/เลนส์เข้าคลัง';
+  document.getElementById('saveInvItemBtn').textContent = 'บันทึกเข้าคลัง';
+  document.getElementById('invDeleteRow').hidden = true;
   document.getElementById('iDate').value = todayStr();
   document.getElementById('iCode').value = 'CAM-' + String(inventory.length+1).padStart(4,'0');
   invEvidenceDataUrl = null; pendingUploads.invEvidence = null;
   document.getElementById('iEvidenceThumb').style.display='none';
   document.getElementById('invModalBackdrop').classList.add('open');
 }
+function openEditInvModal(itemId){
+  const item = inventory.find(i=>i.id===itemId);
+  if(!item) return;
+  editingInvId = itemId;
+  document.getElementById('invModalTitle').textContent = 'แก้ไขข้อมูลกล้อง/เลนส์';
+  document.getElementById('saveInvItemBtn').textContent = 'บันทึกการแก้ไข';
+  document.getElementById('invDeleteRow').hidden = false;
+  document.getElementById('iName').value = item.name || '';
+  document.getElementById('iSN').value = item.sn || '';
+  document.getElementById('iCode').value = item.productCode || '';
+  document.getElementById('iCondition').value = item.condition || '';
+  document.getElementById('iSupplier').value = item.supplier || '';
+  document.getElementById('iCost').value = item.purchaseCost != null ? item.purchaseCost : '';
+  document.getElementById('iDate').value = item.dateIn || todayStr();
+  invEvidenceDataUrl = null; pendingUploads.invEvidence = null;
+  const thumb = document.getElementById('iEvidenceThumb');
+  if(item.evidencePhoto){ thumb.src = item.evidencePhoto.split(',')[0]; thumb.style.display='block'; }
+  else thumb.style.display='none';
+  document.getElementById('invModalBackdrop').classList.add('open');
+}
 function closeInvModal(){
   document.getElementById('invModalBackdrop').classList.remove('open');
+  editingInvId = null;
+  document.getElementById('invModalTitle').textContent = 'รับกล้อง/เลนส์เข้าคลัง';
+  document.getElementById('saveInvItemBtn').textContent = 'บันทึกเข้าคลัง';
+  document.getElementById('invDeleteRow').hidden = true;
   ['iName','iSN','iCode','iSupplier','iCost','iCondition'].forEach(id=>document.getElementById(id).value='');
 }
 function handleInvEvidence(e){
@@ -1156,19 +1188,29 @@ async function saveInventoryItem(){
   if(!name){ alert('กรุณากรอกชื่อรุ่น'); return; }
   if(isBtnLocked('saveInvItemBtn')) return;
   try{
-  const evidencePhotoUrl = await resolveImageUpload('invEvidence');
-  const item = {
-    id: uid(), name,
+  const isEditing = !!editingInvId;
+  const newEvidenceUrl = await resolveImageUpload('invEvidence');
+  const common = {
+    name,
     sn: document.getElementById('iSN').value.trim(),
     productCode: document.getElementById('iCode').value.trim(),
     condition: document.getElementById('iCondition').value.trim(),
     supplier: document.getElementById('iSupplier').value.trim() || '-',
     purchaseCost: cost,
-    dateIn: document.getElementById('iDate').value || todayStr(),
-    status: 'stock', salePrice:null, saleDate:null, customer:null, saleSlip:null,
-    evidencePhoto: evidencePhotoUrl || null
+    dateIn: document.getElementById('iDate').value || todayStr()
   };
-  inventory.unshift(item);
+  if(isEditing){
+    const item = inventory.find(i=>i.id===editingInvId);
+    if(item){
+      Object.assign(item, common);
+      if(newEvidenceUrl) item.evidencePhoto = newEvidenceUrl; // only replace when a new photo was attached
+    }
+  } else {
+    inventory.unshift(Object.assign({
+      id: uid(), status: 'stock', salePrice:null, saleDate:null, customer:null, saleSlip:null,
+      evidencePhoto: newEvidenceUrl || null
+    }, common));
+  }
   await saveInventory();
   closeInvModal();
   renderAll();
@@ -1606,6 +1648,7 @@ function renderInventory(){
           ${item.status==='stock'
             ? `<button class="btn small primary" style="flex:1;" onclick="openSoldModal('${item.id}')">บันทึกขาย</button>`
             : `<button class="btn small ghost" style="flex:1;" onclick="reopenItem('${item.id}')">ยกเลิกการขาย</button>`}
+          <button class="btn small ghost" onclick="openEditInvModal('${item.id}')">แก้ไข</button>
           <button class="btn small ghost" onclick="openEvidModal('${item.id}')">📎</button>
           <button class="btn small danger" onclick="deleteItem('${item.id}')">ลบ</button>
         </div>
