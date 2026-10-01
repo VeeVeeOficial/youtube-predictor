@@ -177,6 +177,20 @@
       <div class="hint" style="margin-top:4px;">= กำไรสุทธิ (เงินสด) + มูลค่าสต็อกคงเหลือ — เงินที่จ่ายไปซื้อของที่ยังขายไม่ได้ยังไม่ถือว่าขาดทุน แค่ยังไม่ได้เปลี่ยนเป็นเงินสด</div>
     </div>
     <div class="card">
+      <h3>ทรัพย์สินรวมตอนนี้</h3>
+      <div class="hint" style="margin-bottom:8px;">กรอกเงินสดคงเหลือและมูลค่าหุ้น/เงินลงทุนเองเป็นระยะ — มูลค่าสต็อกคำนวณให้อัตโนมัติจากคลังกล้อง</div>
+      <div class="field-row">
+        <div class="field"><label>เงินสดคงเหลือ (บาท)</label><input type="number" id="cashOnHandInput" placeholder="0"></div>
+        <div class="field"><label>มูลค่าหุ้น (บาท)</label><input type="number" id="sharesValueInput" placeholder="0"></div>
+      </div>
+      <div class="cost-lines">
+        <div class="cost-line"><span>เงินสดคงเหลือ</span><b id="assetsCashDisplay">฿0</b></div>
+        <div class="cost-line"><span>มูลค่าหุ้น</span><b id="assetsSharesDisplay">฿0</b></div>
+        <div class="cost-line"><span>มูลค่าสต็อกกล้อง/เลนส์</span><b id="assetsStockDisplay">฿0</b></div>
+        <div class="cost-total"><span>รวมทรัพย์สินทั้งหมด</span><span id="assetsTotalDisplay">฿0</span></div>
+      </div>
+    </div>
+    <div class="card">
       <h3>รายจ่ายแยกตามหมวดหมู่</h3>
       <div class="hint" style="margin-bottom:8px;">เพื่อให้เห็นว่าเงินที่จ่ายไปทั้งหมดไปที่ไหนบ้าง — ไม่ใช่แค่ซื้อของเข้าสต็อกอย่างเดียว</div>
       <div id="expenseBreakdown"></div>
@@ -213,6 +227,9 @@
   </div>
 
   <div class="view" id="view-inventory">
+    <div class="field" style="margin-bottom:10px;">
+      <input type="text" id="invSearchInput" placeholder="🔍 ค้นหาชื่อรุ่น, SN, รหัสสินค้า, ร้านที่ซื้อ..." oninput="setInvSearch(this.value)">
+    </div>
     <div class="segmented2">
       <button class="on" id="stockFilterAvailable" onclick="setStockFilter('stock')">ในคลัง</button>
       <button id="stockFilterSold" onclick="setStockFilter('sold')">ขายแล้ว</button>
@@ -221,6 +238,11 @@
     <div class="segmented2">
       <button class="on" id="costModeDetailed" onclick="setCostMode('detailed')">ดูต้นทุนรายตัว</button>
       <button id="costModeLump" onclick="setCostMode('lump')">ดูภาพรวมอย่างเดียว</button>
+    </div>
+    <div class="card">
+      <h3>สัดส่วนกล้อง/เลนส์ในคลัง</h3>
+      <div class="hint" style="margin-bottom:10px;">แยกจากชื่อรุ่นอัตโนมัติ (ถ้าชื่อมีคำว่า "เลนส์"/"lens" หรือระบุทางยาวโฟกัสแบบ mm จะนับเป็นเลนส์ นอกนั้นนับเป็นกล้อง) นับเฉพาะของที่ยังอยู่ในคลัง</div>
+      <div id="stockTypeChart"></div>
     </div>
     <div id="invList"></div>
   </div>
@@ -535,7 +557,7 @@ let transactions = [];
 let inventory = [];
 let invoices = [];
 let receipts = [];
-let settings = { taxRate: 5, costMode:'detailed', claudeApiKey:'', claudeModel:'claude-sonnet-5', profile: { shopName:'', ownerName:'', address:'', phone:'', taxId:'' } };
+let settings = { taxRate: 5, costMode:'detailed', claudeApiKey:'', claudeModel:'claude-sonnet-5', cashOnHand: 0, sharesValue: 0, profile: { shopName:'', ownerName:'', address:'', phone:'', taxId:'' } };
 let currentTxType = 'income';
 let pendingReceipts = []; // [{dataUrl, base64}] photos attached to the current income/expense entry
 let invEvidenceDataUrl = null;
@@ -720,6 +742,20 @@ async function loadAll(){
     settings.taxRate = remote.taxRate != null ? remote.taxRate : settings.taxRate;
     settings.costMode = remote.costMode || settings.costMode;
     settings.profile = remote.profile || settings.profile;
+    // cashOnHand/sharesValue are a newer field the deployed Apps Script
+    // backend might not know about yet (needs Code.gs redeployed) — only
+    // trust the remote value once it's actually present, otherwise fall
+    // through to the local cache below so nothing gets silently reset to 0.
+    if(remote.cashOnHand != null || remote.sharesValue != null){
+      settings.cashOnHand = remote.cashOnHand != null ? remote.cashOnHand : 0;
+      settings.sharesValue = remote.sharesValue != null ? remote.sharesValue : 0;
+      try{ localStorage.setItem(STORAGE_PREFIX+'assets', JSON.stringify({ cashOnHand: settings.cashOnHand, sharesValue: settings.sharesValue })); }catch(e){}
+    } else {
+      try{
+        const raw = localStorage.getItem(STORAGE_PREFIX+'assets');
+        if(raw){ const local = JSON.parse(raw); settings.cashOnHand = local.cashOnHand||0; settings.sharesValue = local.sharesValue||0; }
+      }catch(e){}
+    }
     // The Claude API key/model now sync via the shared Sheet (source of
     // truth) so they survive mobile Safari clearing local storage/cookies.
     // Cache locally too as a fast-path/offline fallback.
@@ -756,6 +792,8 @@ async function loadAll(){
   if(!settings.claudeModel) settings.claudeModel='claude-sonnet-5';
   if(settings.claudeApiKey==null) settings.claudeApiKey='';
   document.getElementById('taxRateInput').value = settings.taxRate;
+  document.getElementById('cashOnHandInput').value = settings.cashOnHand || '';
+  document.getElementById('sharesValueInput').value = settings.sharesValue || '';
   setCostMode(settings.costMode, true);
   updateShopSub();
   renderAll();
@@ -779,9 +817,15 @@ async function persist(key,val){
       const localPayload = JSON.stringify({ claudeApiKey: val.claudeApiKey||'', claudeModel: val.claudeModel||'claude-sonnet-5' });
       localStorage.setItem(STORAGE_PREFIX+'local', localPayload);
       setLocalCookie_(STORAGE_PREFIX+'local', localPayload, 365);
+      localStorage.setItem(STORAGE_PREFIX+'assets', JSON.stringify({ cashOnHand: val.cashOnHand||0, sharesValue: val.sharesValue||0 }));
     }catch(e){ console.error('local settings save failed', e); }
     try{
-      await apiSave('settings', { taxRate: val.taxRate, costMode: val.costMode, profile: val.profile, claudeApiKey: val.claudeApiKey||'', claudeModel: val.claudeModel||'claude-sonnet-5' });
+      // cashOnHand/sharesValue are sent regardless of whether the deployed
+      // Apps Script backend already knows about them — an older backend
+      // just ignores unrecognized keys, so this is safe either way, and it
+      // starts syncing across devices automatically the moment Code.gs is
+      // redeployed with the matching Settings columns.
+      await apiSave('settings', { taxRate: val.taxRate, costMode: val.costMode, profile: val.profile, claudeApiKey: val.claudeApiKey||'', claudeModel: val.claudeModel||'claude-sonnet-5', cashOnHand: val.cashOnHand||0, sharesValue: val.sharesValue||0 });
       return true;
     }catch(e){
       console.error('storage failed for settings', e);
@@ -1711,6 +1755,17 @@ function renderAll(){
 
   renderInventory();
   renderDailyProfit();
+  updateAssetsTotals();
+}
+// ---------- Total assets ----------
+function updateAssetsTotals(){
+  const cash = parseFloat(document.getElementById('cashOnHandInput').value)||0;
+  const shares = parseFloat(document.getElementById('sharesValueInput').value)||0;
+  const stockValue = inventory.filter(i=>i.status==='stock').reduce((s,i)=>s+itemCostBreakdown(i.id).total,0);
+  document.getElementById('assetsCashDisplay').textContent = fmt(cash);
+  document.getElementById('assetsSharesDisplay').textContent = fmt(shares);
+  document.getElementById('assetsStockDisplay').textContent = fmt(stockValue);
+  document.getElementById('assetsTotalDisplay').textContent = fmt(cash + shares + stockValue);
 }
 // ---------- Daily profit ----------
 function dpShiftDay(delta){
@@ -1830,16 +1885,67 @@ function txRowHtml(t){
     </div>
   </div>`;
 }
+// ---------- Inventory search ----------
+let invSearchQuery = '';
+function setInvSearch(v){
+  invSearchQuery = (v||'').trim().toLowerCase();
+  renderInventory();
+}
+// ---------- Stock composition (camera vs lens) ----------
+function classifyItemType(name){
+  const n = name || '';
+  // No explicit camera/lens field on inventory items, so guess from the
+  // name: an explicit "เลนส์"/"lens" word, or a focal-length/aperture
+  // pattern (e.g. "50mm", "24-70mm", "f/1.8") strongly implies a lens.
+  // Everything else (camera bodies, accessories) counts as กล้อง.
+  if(/เลนส์|lens/i.test(n)) return 'lens';
+  if(/\d+\s*-?\s*\d*\s*mm\b/i.test(n)) return 'lens';
+  if(/\bf\/?\d+(\.\d+)?\b/i.test(n)) return 'lens';
+  return 'camera';
+}
+function renderStockTypeChart(){
+  const wrap = document.getElementById('stockTypeChart');
+  if(!wrap) return;
+  const stockItems = inventory.filter(i=>i.status==='stock');
+  const total = stockItems.length;
+  if(!total){
+    wrap.innerHTML = '<div class="empty">ยังไม่มีสินค้าในคลัง</div>';
+    return;
+  }
+  const lensCount = stockItems.filter(i=>classifyItemType(i.name)==='lens').length;
+  const cameraCount = total - lensCount;
+  const lensPct = Math.round(lensCount/total*100);
+  const cameraPct = 100 - lensPct;
+  const deg = lensCount/total*360;
+  wrap.innerHTML = `<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+    <div style="width:92px;height:92px;border-radius:50%;flex-shrink:0;background:conic-gradient(var(--gold) 0deg ${deg}deg, var(--moss) ${deg}deg 360deg);"></div>
+    <div style="flex:1;min-width:140px;">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--gold);display:inline-block;flex-shrink:0;"></span>
+        <span style="font-size:12.5px;">เลนส์ ${lensCount} ตัว (${lensPct}%)</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;">
+        <span style="width:10px;height:10px;border-radius:50%;background:var(--moss);display:inline-block;flex-shrink:0;"></span>
+        <span style="font-size:12.5px;">กล้อง ${cameraCount} ตัว (${cameraPct}%)</span>
+      </div>
+    </div>
+  </div>`;
+}
 function renderInventory(){
   const wrap = document.getElementById('invList');
   const lump = settings.costMode==='lump';
-  const filtered = stockFilter==='all' ? inventory : inventory.filter(it => it.status===stockFilter);
+  const byStatus = stockFilter==='all' ? inventory : inventory.filter(it => it.status===stockFilter);
+  const filtered = invSearchQuery ? byStatus.filter(it => {
+    const hay = [it.name, it.sn, it.productCode, it.supplier, it.condition, it.customer].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(invSearchQuery);
+  }) : byStatus;
   const filterLabel = stockFilter==='stock' ? 'ในคลัง' : stockFilter==='sold' ? 'ขายแล้ว' : 'ทั้งหมด';
   const filteredCostTotal = filtered.reduce((s,it)=>s+itemCostBreakdown(it.id).total, 0);
+  renderStockTypeChart();
   let html = `<div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
       <div>
         <h3 style="margin:0;">คลังกล้อง/เลนส์</h3>
-        <div style="font-size:11px;color:var(--dim);margin-top:2px;">${filtered.length} รายการ (${filterLabel}) จากทั้งหมด ${inventory.length} รายการ</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px;">${filtered.length} รายการ (${filterLabel}${invSearchQuery?' · ค้นหา "'+invSearchQuery+'"':''}) จากทั้งหมด ${inventory.length} รายการ</div>
         <div style="font-size:12.5px;color:var(--gold);margin-top:4px;">ต้นทุนรวม (${filterLabel}): ${fmt(filteredCostTotal)}</div>
       </div>
       <div class="row-btns" style="margin:0;">
@@ -1848,7 +1954,7 @@ function renderInventory(){
       </div>
     </div>`;
   if(!filtered.length){
-    html += `<div class="empty"><div class="big">📷</div>ไม่มีรายการใน "${filterLabel}"</div>`;
+    html += `<div class="empty"><div class="big">📷</div>ไม่มีรายการใน "${filterLabel}"${invSearchQuery?' ที่ตรงกับคำค้นหา':''}</div>`;
   } else {
     filtered.forEach(item=>{
       const {linked,total} = itemCostBreakdown(item.id);
@@ -1897,6 +2003,20 @@ document.getElementById('taxRateInput').addEventListener('input', async (e)=>{
   settings.taxRate = parseFloat(e.target.value)||0;
   await saveSettings();
   renderAll();
+});
+
+// Recompute the totals live on every keystroke, but only persist (and spam
+// the Sheet API) once the user's done editing (blur / enter), same as any
+// other plain number field in this app.
+document.getElementById('cashOnHandInput').addEventListener('input', updateAssetsTotals);
+document.getElementById('sharesValueInput').addEventListener('input', updateAssetsTotals);
+document.getElementById('cashOnHandInput').addEventListener('change', async (e)=>{
+  settings.cashOnHand = parseFloat(e.target.value)||0;
+  await saveSettings();
+});
+document.getElementById('sharesValueInput').addEventListener('change', async (e)=>{
+  settings.sharesValue = parseFloat(e.target.value)||0;
+  await saveSettings();
 });
 
 const initialLoadPromise = loadAll();

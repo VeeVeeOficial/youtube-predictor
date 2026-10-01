@@ -13,7 +13,7 @@ var SPREADSHEET_ID = '1-7LvGF-YykwFllEjyj1HscK2cxQ-Gr6VCcQoEsknscg'; // FrameLed
 // deployed "New version", so this is the only reliable way to confirm a
 // redeploy actually took effect (the Apps Script editor's "last saved" time
 // does NOT mean the public URL is running that code yet).
-var BACKEND_VERSION = 5;
+var BACKEND_VERSION = 6;
 
 // Slips get routed to different Drive folders depending on what they
 // document, chosen by the frontend via the 'folderKey' upload param.
@@ -120,7 +120,9 @@ function readSettings_() {
     costMode: flat.costMode || 'detailed',
     profile: profile,
     claudeApiKey: flat.claudeApiKey || '',
-    claudeModel: flat.claudeModel || 'claude-sonnet-5'
+    claudeModel: flat.claudeModel || 'claude-sonnet-5',
+    cashOnHand: Number(flat.cashOnHand || 0),
+    sharesValue: Number(flat.sharesValue || 0)
   };
 }
 
@@ -134,7 +136,9 @@ function writeSettings_(settingsObj) {
     ['costMode', settingsObj.costMode || 'detailed'],
     ['profile', JSON.stringify(settingsObj.profile || {})],
     ['claudeApiKey', settingsObj.claudeApiKey || ''],
-    ['claudeModel', settingsObj.claudeModel || 'claude-sonnet-5']
+    ['claudeModel', settingsObj.claudeModel || 'claude-sonnet-5'],
+    ['cashOnHand', settingsObj.cashOnHand || 0],
+    ['sharesValue', settingsObj.sharesValue || 0]
   ];
   sheet.getRange(2, 1, rows.length, 2).setValues(rows);
 }
