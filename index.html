@@ -284,6 +284,22 @@
         <button class="btn ghost small" onclick="dpShiftDay(1)">พรุ่งนี้ ▶</button>
       </div>
     </div>
+    <div class="card">
+      <h3>สรุปยอดขายรายเดือน</h3>
+      <div class="field"><label>เลือกเดือน</label><input type="month" id="mpMonth" onchange="renderMonthlyProfit()"></div>
+      <div class="row-btns">
+        <button class="btn ghost small" onclick="mpShiftMonth(-1)">◀ เดือนก่อน</button>
+        <button class="btn ghost small" onclick="mpGoThisMonth()">เดือนนี้</button>
+        <button class="btn ghost small" onclick="mpShiftMonth(1)">เดือนถัดไป ▶</button>
+      </div>
+      <div class="stat-grid" style="margin-top:12px;">
+        <div class="stat"><div class="lbl">กล้องที่ขาย</div><div class="val" id="mpCameraCount">0</div></div>
+        <div class="stat"><div class="lbl">เลนส์ที่ขาย</div><div class="val" id="mpLensCount">0</div></div>
+        <div class="stat profit"><div class="lbl">กำไรรวมเดือนนี้</div><div class="val" id="mpProfit">฿0</div></div>
+        <div class="stat"><div class="lbl">รวมตัวที่ขาย</div><div class="val" id="mpTotalCount">0</div></div>
+      </div>
+      <div class="hint" style="margin-top:8px;">แยกกล้อง/เลนส์แบบเดียวกับกราฟในคลังกล้อง (เดาจากชื่อรุ่น) — นับเฉพาะตัวที่มีวันที่ขายอยู่ในเดือนที่เลือก</div>
+    </div>
     <div class="stat-grid">
       <div class="stat profit"><div class="lbl">กำไรวันนี้ (จากการขาย)</div><div class="val" id="dpProfit">฿0</div></div>
       <div class="stat"><div class="lbl">จำนวนตัวที่ขาย</div><div class="val" id="dpCount">0</div></div>
@@ -909,7 +925,7 @@ document.querySelectorAll('.tab').forEach(t=>{
     t.classList.add('active');
     document.getElementById('view-'+t.dataset.tab).classList.add('active');
     if(t.dataset.tab==='invoice') populateInvoiceItemSelect();
-    if(t.dataset.tab==='dailyprofit') renderDailyProfit();
+    if(t.dataset.tab==='dailyprofit'){ renderDailyProfit(); renderMonthlyProfit(); }
   });
 });
 
@@ -1755,6 +1771,7 @@ function renderAll(){
 
   renderInventory();
   renderDailyProfit();
+  renderMonthlyProfit();
   updateAssetsTotals();
 }
 // ---------- Total assets ----------
@@ -1823,6 +1840,37 @@ function renderDailyProfit(){
 
   const txWrap = document.getElementById('dpTxList');
   txWrap.innerHTML = dayTx.length ? dayTx.map(txRowHtml).join('') : '<div class="empty">ไม่มีรายรับ-รายจ่ายในวันนี้</div>';
+}
+// ---------- Monthly sold summary (camera vs lens) ----------
+function mpShiftMonth(delta){
+  const input = document.getElementById('mpMonth');
+  const [y,m] = (input.value || todayStr().slice(0,7)).split('-').map(Number);
+  const d = new Date(y, m-1+delta, 1);
+  input.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  renderMonthlyProfit();
+}
+function mpGoThisMonth(){
+  document.getElementById('mpMonth').value = todayStr().slice(0,7);
+  renderMonthlyProfit();
+}
+function renderMonthlyProfit(){
+  const monthEl = document.getElementById('mpMonth');
+  if(!monthEl) return;
+  if(!monthEl.value) monthEl.value = todayStr().slice(0,7);
+  const month = monthEl.value; // YYYY-MM
+
+  const soldThisMonth = inventory.filter(i => i.status==='sold' && i.saleDate && i.saleDate.slice(0,7)===month);
+  let cameraCount = 0, lensCount = 0, totalProfit = 0;
+  soldThisMonth.forEach(item=>{
+    if(classifyItemType(item.name)==='lens') lensCount++; else cameraCount++;
+    const {total:cost} = itemCostBreakdown(item.id);
+    totalProfit += (item.salePrice||0) - cost;
+  });
+
+  document.getElementById('mpCameraCount').textContent = cameraCount;
+  document.getElementById('mpLensCount').textContent = lensCount;
+  document.getElementById('mpProfit').textContent = fmt(totalProfit);
+  document.getElementById('mpTotalCount').textContent = soldThisMonth.length;
 }
 function renderExpenseBreakdown(){
   const wrap = document.getElementById('expenseBreakdown');
