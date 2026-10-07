@@ -160,6 +160,7 @@
     <button class="tab" data-tab="inventory">คลังกล้อง</button>
     <button class="tab" data-tab="invoice">ออกบิล</button>
     <button class="tab" data-tab="dailyprofit">กำไรรายวัน</button>
+    <button class="tab" data-tab="audit">ตรวจสอบเงิน</button>
   </div>
 
   <div class="view active" id="view-dashboard">
@@ -312,6 +313,36 @@
       <div id="dpSoldList"></div>
     </div>
     <div class="card"><h3>รายรับ-รายจ่ายทั้งหมดของวันนี้</h3><div id="dpTxList"></div></div>
+  </div>
+
+  <div class="view" id="view-audit">
+    <div class="card">
+      <h3>ยอดขายรวม vs เงินที่บันทึกรับจริง</h3>
+      <div class="hint" style="margin-bottom:10px;">เทียบราคาขายที่บันทึกไว้ในของทุกตัวที่สถานะ "ขายแล้ว" กับยอดรายรับทั้งหมดที่บันทึกจริง — ถ้าตัวเลขไม่ตรงกัน แปลว่ามีรายการขายที่เงินเข้าไม่ตรงตามที่ควรจะเป็น</div>
+      <div class="cost-lines">
+        <div class="cost-line"><span>ยอดขายรวม (จากสถานะ "ขายแล้ว" ทุกตัว)</span><b id="auditSoldTotal">฿0</b></div>
+        <div class="cost-line"><span>รายรับที่บันทึกจริงทั้งหมด</span><b id="auditIncomeTotal">฿0</b></div>
+        <div class="cost-total"><span>ส่วนต่าง</span><span id="auditGap">฿0</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>⚠ สินค้า "ขายแล้ว" ที่ไม่มีรายรับผูกไว้เลย</h3>
+      <div class="hint" style="margin-bottom:8px;">ของออกจากคลังไปแล้ว (มูลค่าสต็อกลดลง) แต่ไม่มีรายการรับเงินของตัวนี้ในระบบ — เงินอาจไม่เคยถูกบันทึก หรือรายรับถูกลบไปทีหลัง</div>
+      <div id="auditMissingIncome"></div>
+    </div>
+    <div class="card">
+      <h3>⚠ สินค้า "ขายแล้ว" ที่ยอดรับเงินไม่ตรงกับราคาขาย</h3>
+      <div id="auditMismatch"></div>
+    </div>
+    <div class="card">
+      <h3>⚠ รายจ่ายที่ผูกไว้กับสินค้าที่ไม่มีอยู่ในคลังแล้ว</h3>
+      <div class="hint" style="margin-bottom:8px;">สินค้าตัวที่รายจ่ายนี้เคยผูกไว้ถูกลบออกจากคลังไปแล้ว ต้นทุนก้อนนี้เลยไม่ถูกนับในสต็อกอีกต่อไป — เช็คว่าลบผิดตัวหรือเปล่า</div>
+      <div id="auditOrphanExpense"></div>
+    </div>
+    <div class="card">
+      <h3>หมายเหตุสำคัญ</h3>
+      <div class="hint">เครื่องมือนี้ตรวจได้เฉพาะข้อมูลที่ "ยังอยู่" ในระบบตอนนี้เท่านั้น — การลบสินค้าหรือลบรายรับ-รายจ่ายในแอปไม่มีการเก็บประวัติไว้เลย ถ้าหน้านี้ไม่เจอปัญหาอะไรแต่สต็อกยังลดลงแบบอธิบายไม่ได้ ให้ลองเทียบกับไฟล์ที่เคยกด ⬇ JSON/CSV สำรองไว้ก่อนหน้า (ถ้ามี) เพื่อดูว่ารายการไหนหายไปจากของเก่า</div>
+    </div>
   </div>
 
   <div class="fab-inner"><button class="fab-btn" onclick="openAddModal()">+</button></div>
@@ -926,6 +957,7 @@ document.querySelectorAll('.tab').forEach(t=>{
     document.getElementById('view-'+t.dataset.tab).classList.add('active');
     if(t.dataset.tab==='invoice') populateInvoiceItemSelect();
     if(t.dataset.tab==='dailyprofit'){ renderDailyProfit(); renderMonthlyProfit(); }
+    if(t.dataset.tab==='audit') renderAudit();
   });
 });
 
@@ -1773,6 +1805,7 @@ function renderAll(){
   renderDailyProfit();
   renderMonthlyProfit();
   updateAssetsTotals();
+  renderAudit();
 }
 // ---------- Total assets ----------
 function updateAssetsTotals(){
@@ -1871,6 +1904,70 @@ function renderMonthlyProfit(){
   document.getElementById('mpLensCount').textContent = lensCount;
   document.getElementById('mpProfit').textContent = fmt(totalProfit);
   document.getElementById('mpTotalCount').textContent = soldThisMonth.length;
+}
+// ---------- Money trail audit ----------
+// Checks only what's still present in the data right now — deleting an
+// inventory item or a transaction leaves no trace at all, so this can't
+// catch a sale whose record (item or income) was removed after the fact.
+// It does catch the more common slip: an item marked "sold" whose income
+// entry was never created, got the wrong amount, or was linked to the
+// wrong item — any of which drains stock value without matching cash.
+function renderAudit(){
+  const soldItems = inventory.filter(i=>i.status==='sold');
+  const soldTotal = soldItems.reduce((s,i)=>s+(i.salePrice||0), 0);
+  const incomeTotal = transactions.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount, 0);
+  document.getElementById('auditSoldTotal').textContent = fmt(soldTotal);
+  document.getElementById('auditIncomeTotal').textContent = fmt(incomeTotal);
+  const gap = soldTotal - incomeTotal;
+  const gapEl = document.getElementById('auditGap');
+  gapEl.textContent = fmt(gap);
+  gapEl.style.color = Math.abs(gap) > 1 ? 'var(--rust)' : 'var(--moss)';
+
+  // A lump-sum sale (bulk sell / one invoice covering several items) splits
+  // its income amount evenly across every linked item id, same convention
+  // itemCostBreakdown() uses on the expense side.
+  const incomeByItem = {};
+  transactions.filter(t=>t.type==='income').forEach(t=>{
+    const ids = linkedItemIdsOf(t);
+    if(!ids.length) return;
+    const share = t.amount / ids.length;
+    ids.forEach(id => { incomeByItem[id] = (incomeByItem[id]||0) + share; });
+  });
+
+  const missing = [];
+  const mismatch = [];
+  soldItems.forEach(item=>{
+    const recorded = incomeByItem[item.id] || 0;
+    if(recorded <= 0) missing.push(item);
+    else if(Math.abs(recorded - (item.salePrice||0)) > 1) mismatch.push({item, recorded});
+  });
+
+  document.getElementById('auditMissingIncome').innerHTML = missing.length ? missing.map(item => `
+    <div class="tx">
+      <div class="l">
+        <div class="name">${item.name}</div>
+        <div class="meta">SN: ${item.sn||'-'} · ขายวันที่ ${item.saleDate||'-'} · ลูกค้า: ${item.customer||'-'}</div>
+      </div>
+      <div class="amt expense">ราคาขาย ${fmt(item.salePrice)}</div>
+    </div>
+  `).join('') : '<div class="empty">ไม่พบ — ของที่ขายแล้วทุกตัวมีรายรับผูกไว้</div>';
+
+  document.getElementById('auditMismatch').innerHTML = mismatch.length ? mismatch.map(({item,recorded}) => `
+    <div class="tx">
+      <div class="l">
+        <div class="name">${item.name}</div>
+        <div class="meta">SN: ${item.sn||'-'} · ขายวันที่ ${item.saleDate||'-'}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="meta">ราคาขายที่บันทึก: ${fmt(item.salePrice)}</div>
+        <div class="amt expense">รับจริง: ${fmt(recorded)}</div>
+      </div>
+    </div>
+  `).join('') : '<div class="empty">ไม่พบ</div>';
+
+  const inventoryIds = new Set(inventory.map(i=>i.id));
+  const orphanExpenses = transactions.filter(t=>t.type==='expense' && linkedItemIdsOf(t).some(id=>!inventoryIds.has(id)));
+  document.getElementById('auditOrphanExpense').innerHTML = orphanExpenses.length ? orphanExpenses.map(txRowHtml).join('') : '<div class="empty">ไม่พบ</div>';
 }
 function renderExpenseBreakdown(){
   const wrap = document.getElementById('expenseBreakdown');
